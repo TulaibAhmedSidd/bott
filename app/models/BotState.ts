@@ -8,6 +8,7 @@ const BotStateSchema = new mongoose.Schema({
         enum: ["IDLE", "BUYING", "HOLDING", "SELLING", "STOPPED"],
         default: "IDLE",
     },
+    indicatorValue: String, // e.g. "RSI=45.2" or "MACD=..."
     isRunning: Boolean,
     entryPrice: Number,
     exitPrice: Number,

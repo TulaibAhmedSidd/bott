@@ -283,18 +283,32 @@ import BotState from "@/app/models/BotState"
 import Trade from "@/app/models/Trade"
 import { getExchange } from "./exchange"
 import connectDB from "@/app/mongodb"
+import { shouldBuy, getStrategyValue } from "./strategy"
+import { RSI } from 'technicalindicators'
 
 const loops: Record<string, boolean> = {}
 
-export async function startBot(symbol: string) {
+export async function startBot(symbol: string, mode: 'TESTNET' | 'LIVE') {
   if (loops[symbol]) return
   loops[symbol] = true
 
   await connectDB()
-  const exchange = await getExchange()
+  const exchange = await getExchange(mode)
+
+  // Log START event
+  const startState = await BotState.findOne({ symbol })
+  await Trade.create({
+    symbol,
+    side: 'START',
+    reason: 'USER_ACTION',
+    price: 0,
+    quantity: 0,
+    strategy: startState?.strategy || 'RSI'
+  })
 
   while (loops[symbol]) {
     try {
+      // Re-fetch state to check for STOP command (and Strategy updates)
       const state = await BotState.findOne({ symbol })
       if (!state || !state.isRunning) {
         loops[symbol] = false
@@ -313,23 +327,41 @@ export async function startBot(symbol: string) {
       const price = ticker.last!
       state.lastPrice = price
 
+      // STRATEGY: Fetch Candles
+      const candles = await exchange.fetchOHLCV(symbol, '1m', undefined, 50) // Need more candles for MACD/BB
+      const closes = candles.map((c: any) => c[4])
+      const strategyName = state.strategy || 'RSI'
+
       // BUY
       if (state.status === 'IDLE') {
-        const qty = state.tradeUSDT / price
+        // Only buy if Strategy says YES
+        if (shouldBuy(closes, strategyName)) {
+          const qty = state.tradeUSDT / price
 
-        await exchange.createMarketBuyOrder(symbol, qty)
+          console.log(`[BOT ${symbol}] ${strategyName} BUY SIGNAL. Price=${price} Qty=${qty}`)
+          await exchange.createMarketBuyOrder(symbol, qty)
 
-        state.status = 'HOLDING'
-        state.entryPrice = price
-        state.quantity = qty
+          state.status = 'HOLDING'
+          state.entryPrice = price
+          state.quantity = qty
 
-        await Trade.create({
-          symbol,
-          side: 'BUY',
-          price,
-          quantity: qty,
-          entryPrice: price,
-        })
+          await Trade.create({
+            symbol,
+            side: 'BUY',
+            price,
+            quantity: qty,
+            entryPrice: price,
+            strategy: strategyName
+          })
+          console.log(`[BOT ${symbol}] BUY EXECUTED`)
+        } else {
+          const val = getStrategyValue(closes, strategyName)
+          console.log(`[BOT ${symbol}] WAITING (${strategyName}): ${val}`)
+
+          // Update UI with current indicator status so user knows why it's not buying
+          state.indicatorValue = val;
+          await state.save();
+        }
       }
 
       // SELL (TARGET)
@@ -344,6 +376,9 @@ export async function startBot(symbol: string) {
         state.status === 'HOLDING' &&
         (price >= targetPrice || price <= stopPrice)
       ) {
+        const reason = price >= targetPrice ? 'TARGET' : 'STOP_LOSS'
+        console.log(`[BOT ${symbol}] SELLING (${reason}): Price=${price} Entry=${state.entryPrice} PnL=${((price - state.entryPrice!) / state.entryPrice! * 100).toFixed(2)}%`)
+
         await exchange.createMarketSellOrder(symbol, state.quantity!)
 
         const pnl = (price - state.entryPrice!) * state.quantity!
@@ -351,6 +386,10 @@ export async function startBot(symbol: string) {
         state.status = 'IDLE'
         state.realizedPnL += pnl
         state.dailyPnL += pnl
+
+        const entryPrice = state.entryPrice!
+        const quantity = state.quantity!
+
         state.entryPrice = undefined
         state.quantity = undefined
 
@@ -358,12 +397,19 @@ export async function startBot(symbol: string) {
           symbol,
           side: 'SELL',
           price,
-          quantity: state.quantity,
+          quantity,
           pnl,
+          reason,
+          entryPrice,
+          endedAt: new Date(),
+          strategy: strategyName
         })
+
+        console.log(`[BOT ${symbol}] SELL EXECUTED. PnL=${pnl}`)
 
         // STOP FOR DAY IF TARGET HIT
         if (state.dailyPnL >= state.tradeUSDT * (state.targetPct / 100)) {
+          console.log(`[BOT ${symbol}] DAILY TARGET HIT. STOPPING.`)
           state.isRunning = false
           loops[symbol] = false
         }
@@ -380,8 +426,16 @@ export async function startBot(symbol: string) {
 
 export async function stopBot(symbol: string) {
   loops[symbol] = false
-  await BotState.updateOne({ symbol }, { isRunning: false })
-}
-export async function stopBot2() {
-    state.isRunning = false;
+  await connectDB() // Ensure DB connection
+  const state = await BotState.findOneAndUpdate({ symbol }, { isRunning: false })
+
+  // Log STOP event
+  await Trade.create({
+    symbol,
+    side: 'STOP',
+    reason: 'USER_ACTION',
+    price: 0,
+    quantity: 0,
+    strategy: state?.strategy || 'RSI'
+  })
 }

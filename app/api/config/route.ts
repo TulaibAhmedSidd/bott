@@ -41,7 +41,7 @@
 export const runtime = "nodejs";
 
 import { NextResponse } from "next/server";
-import  connectDB  from "@/app/mongodb";
+import connectDB from "@/app/mongodb";
 import BotConfig from "@/app/models/BotConfig";
 import BotState from "@/app/models/BotState";
 
@@ -55,14 +55,34 @@ export async function POST(req: Request) {
   await connectDB();
   const body = await req.json();
 
+  // If we only want to update mode, handle specific payload? 
+  // Or just always replace config. 
+  // If UI sends full config, it is fine.
+
   await BotConfig.deleteMany({}); // single-bot system for now
 
-  const config = await BotConfig.create(body);
+  const config = await BotConfig.create({
+    ...body,
+    tradingMode: body.tradingMode || 'TESTNET' // Default if missing
+  });
 
-  // ensure state exists
+  // ensure state exists or update parameters if exists
   await BotState.findOneAndUpdate(
     { symbol: body.symbol },
-    { symbol: body.symbol, status: "IDLE" },
+    {
+      $set: {
+        symbol: body.symbol,
+        tradeUSDT: body.tradeUSDT,
+        targetPct: body.dailyTarget,
+        stopLossPct: body.stopLoss
+      },
+      $setOnInsert: {
+        status: "IDLE",
+        realizedPnL: 0,
+        dailyPnL: 0,
+        isRunning: false
+      }
+    },
     { upsert: true }
   );
 
