@@ -20,7 +20,7 @@ export async function GET() {
 
   // Fetch Config for Mode
   const config = await BotConfig.findOne()
-  const mode = config?.tradingMode || (process.env.TRADING_MODE === 'test' ? 'TESTNET' : 'LIVE')
+  const mode = config?.tradingMode || (process.env.NEXT_PUBLIC_TRADING_MODE === 'test' ? 'TESTNET' : 'LIVE')
 
   // Fetch all active bots or recently updated ones
   const bots = await BotState.find({

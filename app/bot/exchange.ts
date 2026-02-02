@@ -31,10 +31,10 @@ export async function getExchange(mode: 'TESTNET' | 'LIVE' = 'TESTNET') {
   exchanges[mode] = new ccxt.binance({
     apiKey: isTest
       ? process.env.NEXT_PUBLIC_TEST_BINANCE_API_KEY
-      : process.env.BINANCE_API_KEY,
+      : process.env.NEXT_PUBLIC_BINANCE_API_KEY,
     secret: isTest
       ? process.env.NEXT_PUBLIC_TEST_BINANCE_API_SECRET
-      : process.env.BINANCE_API_SECRET,
+      : process.env.NEXT_PUBLIC_BINANCE_API_SECRET,
     sandbox: isTest,
     enableRateLimit: true,
     options: {
