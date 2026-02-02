@@ -9,6 +9,8 @@ const TradeSchema = new mongoose.Schema({
   quantity: Number,
   pnl: Number,
   reason: String, // TARGET, STOP_LOSS, MANUAL
+  balanceBefore: Number,
+  balanceAfter: Number,
   createdAt: { type: Date, default: Date.now },
   endedAt: Date,
 });

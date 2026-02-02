@@ -283,7 +283,7 @@ import BotState from "@/app/models/BotState"
 import Trade from "@/app/models/Trade"
 import { getExchange } from "./exchange"
 import connectDB from "@/app/mongodb"
-import { shouldBuy, getStrategyValue } from "./strategy"
+import { shouldBuy, shouldSell, getStrategyValue } from "./strategy"
 import { RSI } from 'technicalindicators'
 
 const loops: Record<string, boolean> = {}
@@ -303,8 +303,16 @@ export async function startBot(symbol: string, mode: 'TESTNET' | 'LIVE') {
     reason: 'USER_ACTION',
     price: 0,
     quantity: 0,
-    strategy: startState?.strategy || 'RSI'
+    strategy: startState?.strategy || 'RSI',
+    balanceBefore: (await exchange.fetchBalance()).total['USDT'],
+    balanceAfter: 0
   })
+
+  // RESET Trade Count for this run
+  if (startState) {
+    startState.tradeCount = 0
+    await startState.save()
+  }
 
   while (loops[symbol]) {
     try {
@@ -339,6 +347,7 @@ export async function startBot(symbol: string, mode: 'TESTNET' | 'LIVE') {
           const qty = state.tradeUSDT / price
 
           console.log(`[BOT ${symbol}] ${strategyName} BUY SIGNAL. Price=${price} Qty=${qty}`)
+          const balBefore = (await exchange.fetchBalance()).total['USDT']
           await exchange.createMarketBuyOrder(symbol, qty)
 
           state.status = 'HOLDING'
@@ -351,7 +360,8 @@ export async function startBot(symbol: string, mode: 'TESTNET' | 'LIVE') {
             price,
             quantity: qty,
             entryPrice: price,
-            strategy: strategyName
+            strategy: strategyName,
+            balanceBefore: balBefore
           })
           console.log(`[BOT ${symbol}] BUY EXECUTED`)
         } else {
@@ -364,22 +374,23 @@ export async function startBot(symbol: string, mode: 'TESTNET' | 'LIVE') {
         }
       }
 
-      // SELL (TARGET)
-      const targetPrice =
-        state.entryPrice! * (1 + state.targetPct / 100)
+      // SELL LOGIC using Strategy
+      const sellSignal = shouldSell(
+        state.entryPrice!,
+        price,
+        state.targetPct,
+        state.stopLossPct
+      )
 
-      // SELL (STOP LOSS)
-      const stopPrice =
-        state.entryPrice! * (1 - state.stopLossPct / 100)
-
-      if (
-        state.status === 'HOLDING' &&
-        (price >= targetPrice || price <= stopPrice)
-      ) {
-        const reason = price >= targetPrice ? 'TARGET' : 'STOP_LOSS'
+      if (state.status === 'HOLDING' && sellSignal) {
+        const reason = sellSignal
         console.log(`[BOT ${symbol}] SELLING (${reason}): Price=${price} Entry=${state.entryPrice} PnL=${((price - state.entryPrice!) / state.entryPrice! * 100).toFixed(2)}%`)
 
+        const balAfter = (await exchange.fetchBalance()).total['USDT'] // Get balance BEFORE sell to be safe? No, we want AFTER. But wait, balance changes.
+        // Actually, for PnL calculation we use price. For Account Balance tracking we want wallet balance.
+
         await exchange.createMarketSellOrder(symbol, state.quantity!)
+        const finalBal = (await exchange.fetchBalance()).total['USDT']  // Balance AFTER sell
 
         const pnl = (price - state.entryPrice!) * state.quantity!
 
@@ -402,14 +413,28 @@ export async function startBot(symbol: string, mode: 'TESTNET' | 'LIVE') {
           reason,
           entryPrice,
           endedAt: new Date(),
-          strategy: strategyName
+          strategy: strategyName,
+          balanceAfter: finalBal
         })
 
         console.log(`[BOT ${symbol}] SELL EXECUTED. PnL=${pnl}`)
 
-        // STOP FOR DAY IF TARGET HIT
+        console.log(`[BOT ${symbol}] SELL EXECUTED. PnL=${pnl}`)
+
+        // Increment Trade Count
+        state.tradeCount = (state.tradeCount || 0) + 1
+
+        // STOP CONDITIONS:
+        // 1. Daily Target Hit
         if (state.dailyPnL >= state.tradeUSDT * (state.targetPct / 100)) {
           console.log(`[BOT ${symbol}] DAILY TARGET HIT. STOPPING.`)
+          state.isRunning = false
+          loops[symbol] = false
+        }
+        // 2. Max Trades Hit (ONLY for DAILY_PCT strategy?) 
+        // Actually, user might want max trades on any strategy. Let's apply globally if maxTrades is set > 0.
+        else if (state.maxTrades && state.tradeCount >= state.maxTrades) {
+          console.log(`[BOT ${symbol}] MAX TRADES (${state.maxTrades}) HIT. STOPPING.`)
           state.isRunning = false
           loops[symbol] = false
         }

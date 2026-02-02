@@ -54,5 +54,11 @@ export async function GET() {
     return { ...b, balance }
   }))
 
-  return NextResponse.json({ bots: botsWithBalance, mode })
+  const totalBalance = botsWithBalance.reduce((sum, b) => sum + (b.balance || 0), 0) // Naive sum? No, we should fetch actual wallet balance once.
+  // Actually, getAccountBalance logic might be per symbol? Let's check exchange.ts.
+  // If we want GLOBAL USDT balance:
+  const exchange = await (await import('@/app/bot/exchange')).getExchange(mode as 'TESTNET' | 'LIVE') // Dynamic import to avoid circular dep if any? No, direct is fine.
+  const globalBalance = (await exchange.fetchBalance()).total['USDT'] || 0
+
+  return NextResponse.json({ bots: botsWithBalance, mode, totalBalance: globalBalance })
 }

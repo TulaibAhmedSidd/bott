@@ -16,11 +16,14 @@ export async function POST(req: Request) {
   const exchange = await getExchange()
   const price = (await exchange.fetchTicker(symbol)).last!
 
+  const balBefore = (await exchange.fetchBalance()).total['USDT']
   await exchange.createMarketSellOrder(symbol, state.quantity!)
+  const balAfter = (await exchange.fetchBalance()).total['USDT']
 
   const pnl = (price - state.entryPrice!) * state.quantity!
   const quantity = state.quantity!
   const entryPrice = state.entryPrice!
+  const strategy = state.strategy || 'RSI' // fallback if missing
 
   state.status = 'IDLE'
   state.realizedPnL += pnl
@@ -35,7 +38,11 @@ export async function POST(req: Request) {
     quantity,
     pnl,
     reason: 'MANUAL',
-    entryPrice
+    entryPrice,
+    strategy,
+    balanceBefore: balBefore,
+    balanceAfter: balAfter,
+    endedAt: new Date()
   })
 
   await state.save()

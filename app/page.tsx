@@ -86,7 +86,7 @@
 
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import ConfigForm from '@/app/components/ConfigForm'
 
 type BotState = {
@@ -102,6 +102,7 @@ type BotState = {
   isRunning?: boolean
   strategy?: string
   indicatorValue?: string
+  quantity?: number
 }
 
 type Trade = {
@@ -127,10 +128,14 @@ const getDuration = (start: string, end?: string) => {
 }
 
 export default function Dashboard() {
-  const [data, setData] = useState<{ bots: BotState[], mode: string } | null>(null)
+  const [data, setData] = useState<{ bots: BotState[], mode: string, totalBalance: number } | null>(null)
   const [trades, setTrades] = useState<Trade[]>([])
 
+  const pollingRef = useRef(false)
+
   const refresh = async () => {
+    if (pollingRef.current) return
+    pollingRef.current = true
     try {
       const s = await fetch('/api/status').then(r => r.json())
       const t = await fetch('/api/trades').then(r => r.json())
@@ -138,6 +143,8 @@ export default function Dashboard() {
       setTrades(t)
     } catch (e) {
       console.error("Failed to fetch data", e)
+    } finally {
+      pollingRef.current = false
     }
   }
 
@@ -162,6 +169,10 @@ export default function Dashboard() {
             <h1 className="text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-orange-400 to-red-500">
               🤖 AlgoTrader Pro
             </h1>
+            <div className="bg-zinc-900 border border-zinc-800 rounded-lg px-4 py-1.5 flex flex-col justify-center">
+              <span className="text-[10px] text-zinc-500 uppercase tracking-widest font-bold">Total Balance</span>
+              <span className="font-mono text-lg font-bold text-green-400">${data?.totalBalance?.toFixed(2) || '0.00'}</span>
+            </div>
             {mode && (
               <button
                 onClick={async () => {
@@ -184,7 +195,18 @@ export default function Dashboard() {
             )}
           </div>
 
-          <div className="flex gap-4">
+          <div className="flex gap-2">
+            <button
+              onClick={async () => {
+                if (confirm("🚨 DELETE ALL BOTS? This will stop all trading and reset configurations.")) {
+                  await fetch('/api/clear-bots', { method: 'POST' });
+                  refresh();
+                }
+              }}
+              className="text-[10px] font-bold text-red-600 hover:bg-red-900/20 border border-red-900/30 px-3 py-2 rounded-lg transition-colors uppercase"
+            >
+              ⚠️ Stop & Delete All
+            </button>
             <button
               onClick={async () => {
                 if (confirm("⚠️ Are you sure you want to clear ALL trade history and reset stats? This cannot be undone.")) {
@@ -194,7 +216,7 @@ export default function Dashboard() {
               }}
               className="text-xs font-bold text-zinc-500 hover:text-red-500 bg-zinc-900 border border-zinc-800 hover:border-red-900 px-3 py-2 rounded-lg transition-colors"
             >
-              🗑️ CLEAR HISTORY
+              🗑️ HISTORY
             </button>
           </div>
         </div>
@@ -233,19 +255,27 @@ export default function Dashboard() {
                         <div className="flex flex-col gap-1 mt-1">
                           <div className="text-[10px] text-zinc-600 bg-zinc-900/50 px-1 rounded border border-zinc-800 inline-block w-fit">
                             Strategy: {bot.strategy || 'RSI'}
+                            {bot.strategy === 'DAILY_PCT' && ` [${(bot as any).tradeCount || 0}/${(bot as any).maxTrades || '∞'}]`}
                           </div>
                           {bot.status === 'IDLE' && bot.isRunning && (
                             <div className="text-[10px] text-zinc-400 font-mono">
                               {bot.indicatorValue ? `signal: ${bot.indicatorValue}` : 'Calculating...'}
                             </div>
                           )}
+                          {bot.status === 'HOLDING' && bot.entryPrice && bot.lastPrice && bot.quantity && (
+                            <div className={`text-xs font-mono font-bold ${(bot.lastPrice - bot.entryPrice) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                              Unrealized: {((bot.lastPrice - bot.entryPrice) * bot.quantity).toFixed(2)} USDT
+                              ({(((bot.lastPrice - bot.entryPrice) / bot.entryPrice) * 100).toFixed(2)}%)
+                            </div>
+                          )}
                         </div>
                       </div>
                       {bot.isRunning && (
                         <button
+                          title="Stops automation. DOES NOT SELL assets."
                           onClick={async () => {
-                            if (confirm(`Stop bot for ${bot.symbol}?`)) {
-                              await fetch('/api/stop', { method: 'POST', body: JSON.stringify({ symbol: bot.symbol }) }) // Note: api/stop needs to support symbol payload if not already
+                            if (confirm(`Stop bot for ${bot.symbol}? (This will NOT sell your position)`)) {
+                              await fetch('/api/stop', { method: 'POST', body: JSON.stringify({ symbol: bot.symbol }) })
                               refresh()
                             }
                           }}
@@ -284,10 +314,11 @@ export default function Dashboard() {
                     {/* MANUAL SELL ACTIONS */}
 
                     <button
+                      title="Immediately sells assets at market price."
                       disabled={bot.status !== 'HOLDING'}
                       onClick={async () => {
                         if (bot.status !== 'HOLDING') return;
-                        if (confirm(`Sell position for ${bot.symbol}?`)) {
+                        if (confirm(`Sell position for ${bot.symbol} immediately?`)) {
                           await fetch('/api/sell', {
                             method: 'POST',
                             body: JSON.stringify({ symbol: bot.symbol }),
@@ -326,6 +357,8 @@ export default function Dashboard() {
                       <th className="text-right pb-3 font-medium">Qty</th>
                       <th className="text-right pb-3 font-medium">Entry</th>
                       <th className="text-right pb-3 font-medium">Exit</th>
+                      <th className="text-right pb-3 font-medium text-zinc-600">Bal (Before)</th>
+                      <th className="text-right pb-3 font-medium text-zinc-600">Bal (After)</th>
                       <th className="text-right pb-3 font-medium">PnL</th>
                       <th className="text-center pb-3 font-medium">Reason</th>
                       <th className="text-right pb-3 font-medium">Duration</th>
@@ -337,9 +370,10 @@ export default function Dashboard() {
                       if (t.side === 'START' || t.side === 'STOP') {
                         return (
                           <tr key={i} className="bg-white/5 border-b border-zinc-800/50">
-                            <td colSpan={10} className="py-2 px-4 text-xs font-mono text-center text-zinc-500 uppercase tracking-widest">
+                            <td colSpan={12} className="py-2 px-4 text-xs font-mono text-center text-zinc-500 uppercase tracking-widest">
                               --- {t.side === 'START' ? '🚀 BOT STARTED' : '🛑 BOT STOPPED'} [{t.symbol}] ({t.strategy}) ---
                               <span className="ml-2 opacity-50">{new Date(t.createdAt).toLocaleTimeString()}</span>
+                              <span className="ml-4 text-[10px] text-zinc-600">Bal: {(t as any).balanceBefore?.toFixed(2)}</span>
                             </td>
                           </tr>
                         )
@@ -358,6 +392,8 @@ export default function Dashboard() {
                           <td className="text-right py-3 text-zinc-300">
                             {t.side === 'SELL' ? t.price?.toFixed(4) : '-'}
                           </td>
+                          <td className="text-right py-3 text-zinc-600 font-mono text-xs">{(t as any).balanceBefore?.toFixed(2) || '-'}</td>
+                          <td className="text-right py-3 text-zinc-600 font-mono text-xs">{(t as any).balanceAfter ? (t as any).balanceAfter.toFixed(2) : '-'}</td>
                           <td className={`text-right py-3 font-bold ${t.pnl && t.pnl > 0 ? 'text-green-400' : t.pnl && t.pnl < 0 ? 'text-red-400' : 'text-zinc-500'}`}>
                             {t.pnl ? t.pnl.toFixed(2) : '-'}
                           </td>
@@ -380,7 +416,7 @@ export default function Dashboard() {
                     })}
                     {trades.length === 0 && (
                       <tr>
-                        <td colSpan={10} className="text-center py-12 text-zinc-600 italic">
+                        <td colSpan={12} className="text-center py-12 text-zinc-600 italic">
                           No trades recorded yet.
                         </td>
                       </tr>

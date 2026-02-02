@@ -50,6 +50,7 @@ export async function POST(req: Request) {
     state.tradeUSDT = config.tradeUSDT;
     state.targetPct = config.dailyTarget;
     state.stopLossPct = config.stopLoss;
+    state.strategy = config.strategy; // Sync strategy on start
 
     // Reset status if it was stopped, so it can start trading again
     if (state.status === 'STOPPED') {

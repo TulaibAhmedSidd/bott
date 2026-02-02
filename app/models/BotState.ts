@@ -21,6 +21,9 @@ const BotStateSchema = new mongoose.Schema({
     targetPct: Number,
     tradeUSDT: Number,
     lastReset: String,
+    strategy: { type: String, default: 'RSI' },
+    maxTrades: Number,
+    tradeCount: { type: Number, default: 0 }
 });
 
 export default mongoose.models.BotState ||

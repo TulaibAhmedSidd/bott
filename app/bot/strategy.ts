@@ -32,6 +32,11 @@ export function shouldBuy(closes: number[], strategy: string = 'RSI') {
     return lastBB && lastClose < lastBB.lower
   }
 
+  if (strategy === 'DAILY_PCT') {
+    // Buy Immediately if engine asks
+    return true
+  }
+
   // Default RSI
   const rsi = RSI.calculate({ values: closes, period: 14 })
   const lastRSI = rsi.pop()
@@ -58,6 +63,9 @@ export function getStrategyValue(closes: number[], strategy: string = 'RSI'): st
     const last = bb.pop()
     const close = closes[closes.length - 1]
     return last ? `Price=${close.toFixed(2)} Low=${last.lower.toFixed(2)}` : 'BB (N/A)'
+  }
+  if (strategy === 'DAILY_PCT') {
+    return 'Looping...'
   }
   const rsi = RSI.calculate({ values: closes, period: 14 })
   return `RSI=${rsi.pop()?.toFixed(2)}`

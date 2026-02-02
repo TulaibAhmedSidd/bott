@@ -71,10 +71,10 @@ export async function POST(req: Request) {
     { symbol: body.symbol },
     {
       $set: {
-        symbol: body.symbol,
-        tradeUSDT: body.tradeUSDT,
         targetPct: body.dailyTarget,
-        stopLossPct: body.stopLoss
+        stopLossPct: body.stopLoss,
+        strategy: body.strategy, // Save Strategy
+        maxTrades: body.maxTrades
       },
       $setOnInsert: {
         status: "IDLE",
