@@ -9,7 +9,7 @@ export async function POST() {
     await connectDB();
 
     // Stop all running bots (flag only, loop needs to check DB)
-    await BotState.updateMany({}, { isRunning: false, status: 'STOPPED' });
+    await BotState.updateMany({}, { $set: { isRunning: false, status: 'STOPPED' } });
 
     // Delete Configs and States
     await BotConfig.deleteMany({});

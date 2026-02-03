@@ -54,7 +54,14 @@ export function shouldSell(entry: number, price: number, target: number, stop: n
 
 export function getStrategyValue(closes: number[], strategy: string = 'RSI'): string {
   if (strategy === 'MACD') {
-    const macd = MACD.calculate({ values: closes, fastPeriod: 12, slowPeriod: 26, signalPeriod: 9 })
+    const macd = MACD.calculate({
+      values: closes,
+      fastPeriod: 12,
+      slowPeriod: 26,
+      signalPeriod: 9,
+      SimpleMAOscillator: false,
+      SimpleMASignal: false
+    })
     const last = macd.pop()
     return last ? `MACD=${last.MACD?.toFixed(2)} Sig=${last.signal?.toFixed(2)}` : 'MACD (N/A)'
   }

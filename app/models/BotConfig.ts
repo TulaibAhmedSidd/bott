@@ -1,6 +1,17 @@
 import mongoose from "mongoose";
 
-const BotConfigSchema = new mongoose.Schema({
+export interface IBotConfig extends mongoose.Document {
+  symbol: string;
+  tradeUSDT: number;
+  dailyTarget: number;
+  stopLoss: number;
+  active: boolean;
+  tradingMode: 'TESTNET' | 'LIVE';
+  strategy: 'RSI' | 'MACD' | 'BOLLINGER' | 'DAILY_PCT';
+  maxTrades?: number;
+}
+
+const BotConfigSchema = new mongoose.Schema<IBotConfig>({
   symbol: { type: String, required: true },
   tradeUSDT: { type: Number, required: true },
   dailyTarget: { type: Number, required: true },
@@ -11,5 +22,5 @@ const BotConfigSchema = new mongoose.Schema({
   maxTrades: Number
 });
 
-export default mongoose.models.BotConfig ||
-  mongoose.model("BotConfig", BotConfigSchema);
+export default (mongoose.models.BotConfig as mongoose.Model<IBotConfig>) ||
+  mongoose.model<IBotConfig>("BotConfig", BotConfigSchema);
