@@ -1,6 +1,27 @@
-import mongoose from "mongoose";
+import mongoose, { Document, Schema } from "mongoose";
 
-const BotStateSchema = new mongoose.Schema({
+interface IBotState extends Document {
+    symbol: string;
+    status: "IDLE" | "BUYING" | "HOLDING" | "SELLING" | "STOPPED";
+    indicatorValue?: string;
+    isRunning?: boolean;
+    entryPrice?: number;
+    exitPrice?: number;
+    quantity?: number;
+    realizedPnL: number;
+    dailyPnL: number;
+    lastPrice?: number;
+    updatedAt: Date;
+    stopLossPct?: number;
+    targetPct?: number;
+    tradeUSDT?: number;
+    lastReset?: string;
+    strategy: string;
+    maxTrades?: number;
+    tradeCount: number;
+}
+
+const BotStateSchema = new Schema<IBotState>({
     symbol: String,
 
     status: {
@@ -27,4 +48,4 @@ const BotStateSchema = new mongoose.Schema({
 });
 
 export default mongoose.models.BotState ||
-    mongoose.model("BotState", BotStateSchema);
+    mongoose.model<IBotState>("BotState", BotStateSchema);
