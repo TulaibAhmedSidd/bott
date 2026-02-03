@@ -14,9 +14,11 @@ export async function POST() {
 
     // 2. Reset Bot Stats (keep them running, just reset counters)
     await BotState.updateMany({}, {
-        realizedPnL: 0,
-        dailyPnL: 0,
-        lastReset: new Date().toISOString().slice(0, 10)
+        $set: {
+            realizedPnL: 0,
+            dailyPnL: 0,
+            lastReset: new Date().toISOString().slice(0, 10)
+        }
     });
 
     return NextResponse.json({ cleared: true });

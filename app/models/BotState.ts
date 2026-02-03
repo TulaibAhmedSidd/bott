@@ -1,4 +1,4 @@
-import mongoose from "mongoose";
+import mongoose, { Document, Schema } from "mongoose";
 
 export interface IBotState extends mongoose.Document {
     symbol?: string;
