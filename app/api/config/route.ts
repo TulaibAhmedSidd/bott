@@ -1,43 +1,3 @@
-// // app/api/start/route.ts
-
-// import { botConfig } from "@/app/bot/config"
-// import { startBot } from "@/app/bot/engine"
-
-
-// export async function POST(req: Request) {
-//   const body = await req.json()
-
-//   Object.assign(botConfig, body)
-
-//   return Response.json({ ok: true, botConfig })
-// }
-
-// export const runtime = 'nodejs'
-
-// import { NextResponse } from 'next/server'
-// import  connectDB from '@/app/mongodb'
-// import BotState from '@/app/models/BotState'
-
-// export async function POST(req: Request) {
-//   await connectDB()
-
-//   const config = await req.json()
-
-//   let state = await BotState.findOne({ symbol: config.symbol })
-
-//   if (!state) {
-//     state = await BotState.create({
-//       symbol: config.symbol,
-//       status: 'IDLE',
-//       realizedPnL: 0,
-//       dailyPnL: 0,
-//     })
-//   }
-
-//   return NextResponse.json({ ok: true })
-// }
-
-
 export const runtime = "nodejs";
 
 import { NextResponse } from "next/server";
@@ -53,40 +13,53 @@ export async function GET() {
 
 export async function POST(req: Request) {
   await connectDB();
-  const body = await req.json();
+  const body = await req.json().catch(() => ({}));
 
-  // If we only want to update mode, handle specific payload? 
-  // Or just always replace config. 
-  // If UI sends full config, it is fine.
+  let existingConfig = await BotConfig.findOne();
 
-  await BotConfig.deleteMany({}); // single-bot system for now
+  if (!existingConfig) {
+    existingConfig = await BotConfig.create({
+      symbol: body.symbol || "BNB/USDT",
+      tradeUSDT: body.tradeUSDT || 10,
+      dailyTarget: body.dailyTarget || 1,
+      stopLoss: body.stopLoss || 0.5,
+      tradingMode: body.tradingMode || "TESTNET",
+      strategy: body.strategy || "BOLLINGER_RSI_EMA"
+    });
+  } else {
+    if (body.tradingMode) existingConfig.tradingMode = body.tradingMode;
+    if (body.symbol) existingConfig.symbol = body.symbol;
+    if (body.tradeUSDT) existingConfig.tradeUSDT = body.tradeUSDT;
+    if (body.dailyTarget) existingConfig.dailyTarget = body.dailyTarget;
+    if (body.stopLoss) existingConfig.stopLoss = body.stopLoss;
+    if (body.strategy) existingConfig.strategy = body.strategy;
+    if (body.maxTrades !== undefined) existingConfig.maxTrades = body.maxTrades;
+    await existingConfig.save();
+  }
 
-  const config = await BotConfig.create({
-    ...body,
-    tradingMode: body.tradingMode || 'TESTNET' // Default if missing
-  });
-
-  // ensure state exists or update parameters if exists
-  await BotState.findOneAndUpdate(
-    { symbol: body.symbol },
-    {
-      $set: {
-        targetPct: body.dailyTarget,
-        stopLossPct: body.stopLoss,
-        strategy: body.strategy, // Save Strategy
-        maxTrades: body.maxTrades
+  if (body.symbol) {
+    await BotState.findOneAndUpdate(
+      { symbol: body.symbol },
+      {
+        $set: {
+          targetPct: body.dailyTarget || existingConfig.dailyTarget,
+          stopLossPct: body.stopLoss || existingConfig.stopLoss,
+          tradeUSDT: body.tradeUSDT || existingConfig.tradeUSDT,
+          strategy: body.strategy || existingConfig.strategy,
+          maxTrades: body.maxTrades
+        },
+        $setOnInsert: {
+          status: "IDLE",
+          realizedPnL: 0,
+          dailyPnL: 0,
+          isRunning: false
+        }
       },
-      $setOnInsert: {
-        status: "IDLE",
-        realizedPnL: 0,
-        dailyPnL: 0,
-        isRunning: false
-      }
-    },
-    { upsert: true }
-  );
+      { upsert: true, new: true }
+    );
+  }
 
-  return NextResponse.json(config);
+  return NextResponse.json(existingConfig);
 }
 
 export async function DELETE() {
@@ -94,4 +67,3 @@ export async function DELETE() {
   await BotConfig.deleteMany({});
   return NextResponse.json({ deleted: true });
 }
-

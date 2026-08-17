@@ -1,15 +1,3 @@
-// app/api/start/route.ts
-
-// import { botConfig } from "@/app/bot/config"
-// import { startBot } from "@/app/bot/engine"
-
-// export async function POST() {
-//   botConfig.running = true
-//   startBot()
-//   return Response.json({ status: 'started' })
-// }
-
-
 export const runtime = "nodejs";
 
 import { NextResponse } from "next/server";
@@ -20,48 +8,53 @@ import BotConfig from "@/app/models/BotConfig";
 
 export async function POST(req: Request) {
   await connectDB();
+  const body = await req.json().catch(() => ({}));
 
-  // 1. Get Config
-  const config = await BotConfig.findOne();
+  let config = await BotConfig.findOne();
   if (!config) {
-    return NextResponse.json({ error: "No config found. Save config first." }, { status: 400 });
+    config = await BotConfig.create({
+      symbol: body.symbol || "BNB/USDT",
+      tradeUSDT: 10,
+      dailyTarget: 1,
+      stopLoss: 0.5,
+      tradingMode: "TESTNET",
+      strategy: "BOLLINGER_RSI_EMA"
+    });
   }
 
-  // 2. Ensure BotState exists & set to RUNNING
-  // Using findOneAndUpdate with separate $set and $setOnInsert to avoid conflicts
-  // and handle status reset logic if needed (we'll do strict update)
+  const symbol = body.symbol || config.symbol || "BNB/USDT";
+  const mode = config.tradingMode || "TESTNET";
 
-  let state = await BotState.findOne({ symbol: config.symbol });
+  let state = await BotState.findOne({ symbol });
 
   if (!state) {
     state = await BotState.create({
-      symbol: config.symbol,
-      status: 'IDLE',
+      symbol,
+      status: "IDLE",
       isRunning: true,
-      tradeUSDT: config.tradeUSDT,
-      targetPct: config.dailyTarget,
-      stopLossPct: config.stopLoss,
+      tradeUSDT: config.tradeUSDT || 10,
+      targetPct: config.dailyTarget || 1,
+      stopLossPct: config.stopLoss || 0.5,
+      strategy: config.strategy || "BOLLINGER_RSI_EMA",
       realizedPnL: 0,
       dailyPnL: 0
     });
   } else {
-    // Update existing state
     state.isRunning = true;
-    state.tradeUSDT = config.tradeUSDT;
-    state.targetPct = config.dailyTarget;
-    state.stopLossPct = config.stopLoss;
-    state.strategy = config.strategy; // Sync strategy on start
+    state.tradeUSDT = config.tradeUSDT || state.tradeUSDT || 10;
+    state.targetPct = config.dailyTarget || state.targetPct || 1;
+    state.stopLossPct = config.stopLoss || state.stopLossPct || 0.5;
+    state.strategy = config.strategy || state.strategy || "BOLLINGER_RSI_EMA";
 
-    // Reset status if it was stopped, so it can start trading again
-    if (state.status === 'STOPPED') {
-      state.status = 'IDLE';
+    if (state.status === "STOPPED") {
+      state.status = "IDLE";
     }
 
     await state.save();
   }
 
-  // 3. Start Engine
-  startBot(config.symbol, config.tradingMode || 'TESTNET');
+  // Launch Engine loop for the symbol with the active trading mode (TESTNET or LIVE)
+  startBot(symbol, mode as "TESTNET" | "LIVE");
 
-  return NextResponse.json({ started: true, symbol: config.symbol, mode: config.tradingMode });
+  return NextResponse.json({ started: true, symbol, mode });
 }

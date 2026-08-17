@@ -7,18 +7,18 @@ export interface IBotConfig extends mongoose.Document {
   stopLoss: number;
   active: boolean;
   tradingMode: 'TESTNET' | 'LIVE';
-  strategy: 'RSI' | 'MACD' | 'BOLLINGER' | 'DAILY_PCT';
+  strategy: string;
   maxTrades?: number;
 }
 
 const BotConfigSchema = new mongoose.Schema<IBotConfig>({
-  symbol: { type: String, required: true },
-  tradeUSDT: { type: Number, required: true },
-  dailyTarget: { type: Number, required: true },
-  stopLoss: { type: Number, required: true },
+  symbol: { type: String, default: "BNB/USDT" },
+  tradeUSDT: { type: Number, default: 10 },
+  dailyTarget: { type: Number, default: 1 },
+  stopLoss: { type: Number, default: 0.5 },
   active: { type: Boolean, default: false },
   tradingMode: { type: String, enum: ['TESTNET', 'LIVE'], default: 'TESTNET' },
-  strategy: { type: String, enum: ['RSI', 'MACD', 'BOLLINGER', 'DAILY_PCT'], default: 'RSI' },
+  strategy: { type: String, default: 'BOLLINGER_RSI_EMA' },
   maxTrades: Number
 });
 

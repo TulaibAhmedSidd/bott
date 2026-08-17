@@ -42,7 +42,7 @@ const BotStateSchema = new mongoose.Schema<IBotState>({
     targetPct: Number,
     tradeUSDT: Number,
     lastReset: String,
-    strategy: { type: String, default: 'RSI' },
+    strategy: { type: String, default: 'BOLLINGER_RSI_EMA' },
     maxTrades: Number,
     tradeCount: { type: Number, default: 0 }
 });

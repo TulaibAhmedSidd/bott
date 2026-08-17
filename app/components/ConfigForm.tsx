@@ -43,7 +43,7 @@ export default function ConfigForm({ onSaved }: { onSaved: () => void }) {
         tradeUSDT: 10,
         dailyTarget: 1,
         stopLoss: 0.5,
-        strategy: "RSI",
+        strategy: "BOLLINGER_RSI_EMA",
     });
 
     const validate = () => {
@@ -93,7 +93,7 @@ export default function ConfigForm({ onSaved }: { onSaved: () => void }) {
                     label="Strategy"
                     value={form.strategy}
                     onChange={(e: any) => setForm({ ...form, strategy: e.target.value })}
-                    options={["RSI", "MACD", "BOLLINGER", "DAILY_PCT"]}
+                    options={["BOLLINGER_RSI_EMA", "VWAP", "RSI", "MACD", "BOLLINGER", "DAILY_PCT"]}
                 />
             </div>
 

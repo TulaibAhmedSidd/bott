@@ -281,12 +281,12 @@
 
 import BotState from "@/app/models/BotState"
 import Trade from "@/app/models/Trade"
-import { getExchange } from "./exchange"
+import { getExchange, formatOrderAmount } from "./exchange"
 import connectDB from "@/app/mongodb"
 import { shouldBuy, shouldSell, getStrategyValue } from "./strategy"
-import { RSI } from 'technicalindicators'
 
 const loops: Record<string, boolean> = {}
+const peaks: Record<string, number> = {}
 
 export async function startBot(symbol: string, mode: 'TESTNET' | 'LIVE') {
   if (loops[symbol]) return
@@ -297,14 +297,22 @@ export async function startBot(symbol: string, mode: 'TESTNET' | 'LIVE') {
 
   // Log START event
   const startState = await BotState.findOne({ symbol })
+  let initBalance = 0
+  try {
+    const balObj = await exchange.fetchBalance()
+    initBalance = balObj?.total?.['USDT'] || 0
+  } catch {
+    initBalance = 0
+  }
+
   await Trade.create({
     symbol,
     side: 'START',
     reason: 'USER_ACTION',
     price: 0,
     quantity: 0,
-    strategy: startState?.strategy || 'RSI',
-    balanceBefore: (await exchange.fetchBalance()).total['USDT'],
+    strategy: startState?.strategy || 'BOLLINGER_RSI_EMA',
+    balanceBefore: initBalance,
     balanceAfter: 0
   })
 
@@ -320,6 +328,7 @@ export async function startBot(symbol: string, mode: 'TESTNET' | 'LIVE') {
       const state = await BotState.findOne({ symbol })
       if (!state || !state.isRunning) {
         loops[symbol] = false
+        delete peaks[symbol]
         break
       }
 
@@ -335,132 +344,147 @@ export async function startBot(symbol: string, mode: 'TESTNET' | 'LIVE') {
       const price = ticker.last!
       state.lastPrice = price
 
-      // STRATEGY: Fetch Candles
-      const candles = await exchange.fetchOHLCV(symbol, '1m', undefined, 50) // Need more candles for MACD/BB
-      const closes = candles.map((c: any) => c[4])
-      const strategyName = state.strategy || 'RSI'
+      // STRATEGY: Fetch Candles (50 candles of 1m)
+      const candles = await exchange.fetchOHLCV(symbol, '1m', undefined, 50)
+      const strategyName = state.strategy || 'BOLLINGER_RSI_EMA'
 
-      // BUY
+      // BUY LOGIC
       if (state.status === 'IDLE') {
-        // Only buy if Strategy says YES
-        if (shouldBuy(closes, strategyName)) {
-          const qty = state.tradeUSDT / price
+        if (shouldBuy(candles, strategyName)) {
+          const rawQty = state.tradeUSDT / price
+          const formattedQty = formatOrderAmount(exchange, symbol, rawQty)
 
-          console.log(`[BOT ${symbol}] ${strategyName} BUY SIGNAL. Price=${price} Qty=${qty}`)
-          const balBefore = (await exchange.fetchBalance()).total['USDT']
-          await exchange.createMarketBuyOrder(symbol, qty)
+          if (formattedQty <= 0) {
+            console.warn(`[BOT ${symbol}] Formatted qty is 0. Trade USDT amount may be too small.`)
+          } else {
+            console.log(`[BOT ${symbol}] ${strategyName} BUY SIGNAL. Price=${price} RawQty=${rawQty} FormattedQty=${formattedQty}`)
 
-          state.status = 'HOLDING'
-          state.entryPrice = price
-          state.quantity = qty
+            let balBefore = 0
+            try {
+              const b = await exchange.fetchBalance()
+              balBefore = b?.total?.['USDT'] || 0
+            } catch {}
 
-          await Trade.create({
-            symbol,
-            side: 'BUY',
-            price,
-            quantity: qty,
-            entryPrice: price,
-            strategy: strategyName,
-            balanceBefore: balBefore
-          })
-          console.log(`[BOT ${symbol}] BUY EXECUTED`)
+            const order = await exchange.createMarketBuyOrder(symbol, formattedQty)
+            const filledPrice = order.average || order.price || price
+            const filledQty = order.filled || formattedQty
+
+            state.status = 'HOLDING'
+            state.entryPrice = filledPrice
+            state.quantity = filledQty
+            peaks[symbol] = filledPrice
+
+            await Trade.create({
+              symbol,
+              side: 'BUY',
+              price: filledPrice,
+              quantity: filledQty,
+              entryPrice: filledPrice,
+              strategy: strategyName,
+              balanceBefore: balBefore
+            })
+            console.log(`[BOT ${symbol}] BUY EXECUTED. Filled Price=${filledPrice} Qty=${filledQty}`)
+          }
         } else {
-          const val = getStrategyValue(closes, strategyName)
+          const val = getStrategyValue(candles, strategyName)
           console.log(`[BOT ${symbol}] WAITING (${strategyName}): ${val}`)
-
-          // Update UI with current indicator status so user knows why it's not buying
-          state.indicatorValue = val;
-          await state.save();
+          state.indicatorValue = val
+          await state.save()
         }
       }
 
-      // SELL LOGIC using Strategy
-      const sellSignal = shouldSell(
-        state.entryPrice!,
-        price,
-        state.targetPct,
-        state.stopLossPct
-      )
+      // HOLDING & SELL LOGIC
+      if (state.status === 'HOLDING') {
+        // Track peak price for Trailing Stop-Loss
+        peaks[symbol] = Math.max(peaks[symbol] || state.entryPrice || price, price)
 
-      if (state.status === 'HOLDING' && sellSignal) {
-        const reason = sellSignal
-        console.log(`[BOT ${symbol}] SELLING (${reason}): Price=${price} Entry=${state.entryPrice} PnL=${((price - state.entryPrice!) / state.entryPrice! * 100).toFixed(2)}%`)
-
-        const balAfter = (await exchange.fetchBalance()).total['USDT'] // Get balance BEFORE sell to be safe? No, we want AFTER. But wait, balance changes.
-        // Actually, for PnL calculation we use price. For Account Balance tracking we want wallet balance.
-
-        await exchange.createMarketSellOrder(symbol, state.quantity!)
-        const finalBal = (await exchange.fetchBalance()).total['USDT']  // Balance AFTER sell
-
-        const pnl = (price - state.entryPrice!) * state.quantity!
-
-        state.status = 'IDLE'
-        state.realizedPnL += pnl
-        state.dailyPnL += pnl
-
-        const entryPrice = state.entryPrice!
-        const quantity = state.quantity!
-
-        state.entryPrice = undefined
-        state.quantity = undefined
-
-        await Trade.create({
-          symbol,
-          side: 'SELL',
+        const sellSignal = shouldSell(
+          state.entryPrice!,
           price,
-          quantity,
-          pnl,
-          reason,
-          entryPrice,
-          endedAt: new Date(),
-          strategy: strategyName,
-          balanceAfter: finalBal
-        })
+          state.targetPct,
+          state.stopLossPct,
+          peaks[symbol]
+        )
 
-        console.log(`[BOT ${symbol}] SELL EXECUTED. PnL=${pnl}`)
+        if (sellSignal) {
+          const reason = sellSignal
+          console.log(`[BOT ${symbol}] SELLING (${reason}): Price=${price} Entry=${state.entryPrice} Peak=${peaks[symbol]} PnL=${(((price - state.entryPrice!) / state.entryPrice!) * 100).toFixed(2)}%`)
 
-        console.log(`[BOT ${symbol}] SELL EXECUTED. PnL=${pnl}`)
+          const sellQty = formatOrderAmount(exchange, symbol, state.quantity!)
+          const order = await exchange.createMarketSellOrder(symbol, sellQty)
+          const fillExitPrice = order.average || order.price || price
 
-        // Increment Trade Count
-        state.tradeCount = (state.tradeCount || 0) + 1
+          let finalBal = 0
+          try {
+            const b = await exchange.fetchBalance()
+            finalBal = b?.total?.['USDT'] || 0
+          } catch {}
 
-        // STOP CONDITIONS:
-        // 1. Daily Target Hit
-        if (state.dailyPnL >= state.tradeUSDT * (state.targetPct / 100)) {
-          console.log(`[BOT ${symbol}] DAILY TARGET HIT. STOPPING.`)
-          state.isRunning = false
-          loops[symbol] = false
-        }
-        // 2. Max Trades Hit (ONLY for DAILY_PCT strategy?) 
-        // Actually, user might want max trades on any strategy. Let's apply globally if maxTrades is set > 0.
-        else if (state.maxTrades && state.tradeCount >= state.maxTrades) {
-          console.log(`[BOT ${symbol}] MAX TRADES (${state.maxTrades}) HIT. STOPPING.`)
-          state.isRunning = false
-          loops[symbol] = false
+          const pnl = (fillExitPrice - state.entryPrice!) * sellQty
+
+          state.status = 'IDLE'
+          state.realizedPnL += pnl
+          state.dailyPnL += pnl
+
+          const entryPrice = state.entryPrice!
+          const quantity = state.quantity!
+
+          state.entryPrice = undefined
+          state.quantity = undefined
+          delete peaks[symbol]
+
+          await Trade.create({
+            symbol,
+            side: 'SELL',
+            price: fillExitPrice,
+            quantity: sellQty,
+            pnl,
+            reason,
+            entryPrice,
+            endedAt: new Date(),
+            strategy: strategyName,
+            balanceAfter: finalBal
+          })
+
+          console.log(`[BOT ${symbol}] SELL EXECUTED (${reason}). PnL=${pnl.toFixed(4)} USDT`)
+
+          state.tradeCount = (state.tradeCount || 0) + 1
+
+          // STOP CONDITIONS
+          if (state.dailyPnL >= state.tradeUSDT * (state.targetPct / 100)) {
+            console.log(`[BOT ${symbol}] DAILY TARGET HIT. STOPPING.`)
+            state.isRunning = false
+            loops[symbol] = false
+          } else if (state.maxTrades && state.tradeCount >= state.maxTrades) {
+            console.log(`[BOT ${symbol}] MAX TRADES (${state.maxTrades}) HIT. STOPPING.`)
+            state.isRunning = false
+            loops[symbol] = false
+          }
         }
       }
 
       await state.save()
     } catch (e) {
-      console.error(`[BOT ${symbol}]`, e)
+      console.error(`[BOT ${symbol}] Error in loop:`, e)
     }
 
-    await new Promise(r => setTimeout(r, 1000))
+    // 5-second tick interval (Safe against Binance rate limits)
+    await new Promise((r) => setTimeout(r, 5000))
   }
 }
 
 export async function stopBot(symbol: string) {
   loops[symbol] = false
-  await connectDB() // Ensure DB connection
+  delete peaks[symbol]
+  await connectDB()
   const state = await BotState.findOneAndUpdate({ symbol }, { isRunning: false })
 
-  // Log STOP event
   await Trade.create({
     symbol,
     side: 'STOP',
     reason: 'USER_ACTION',
     price: 0,
     quantity: 0,
-    strategy: state?.strategy || 'RSI'
+    strategy: state?.strategy || 'BOLLINGER_RSI_EMA'
   })
-}
+}
