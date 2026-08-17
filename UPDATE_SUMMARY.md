@@ -1,44 +1,39 @@
-# AlgoTrader Pro — Trading Bot System Update & Metric Deck Overhaul
+# AlgoTrader Pro — Trading Bot System Update & Architecture Overhaul
 
-**Date:** August 17, 2026  
+**Date:** August 18, 2026  
 **Version:** v2.0-Production  
-**Status:** ✅ Fully Built & Verified (Next.js Build Success)
+**Status:** ✅ Fully Built & Verified (AI Signals Hub & Seconds Scalper Active)
 
 ---
 
 ## 🚀 Executive Summary
 
-This document details the major technical audit, quantitative strategy overhaul, software engineering fixes, UI enhancements, and **Metric Deck Transparency Enhancements** applied to **AlgoTrader Pro** (`mybot`).
+This document details the major technical audit, quantitative strategy overhaul, software engineering fixes, UI enhancements, **AI & Quant Confluence Signal Radar**, and **Ultra-Fast Seconds Scalper Panel** applied to **AlgoTrader Pro** (`mybot`).
 
 ---
 
-## 💡 1. Explanation of Total Balance & Trade Allocation
+## 🎯 1. Live AI & Quant Signal Intelligence Hub
 
-### Why USDT Total Balance Does Not Deduct Immediately Upon Bot Launch:
-When a bot is started, its status begins as **`🟢 SCANNING MARKET (IDLE)`**. 
-- The bot is scanning live market candles (`RSI`, `50-EMA`, `Bollinger Bands`, `VWAP`) to wait for a high-probability buy signal (`RSI <= 35` and price near lower Bollinger Band).
-- **Capital Allocation:** The configured trade amount (e.g. **`$10.00 USDT`**) is committed and ready. 
-- **Balance Deduction:** USDT is deducted from the wallet balance only when a **BUY order actually executes** on Binance (when status changes to `🚀 POSITION ACTIVE (HOLDING)`).
+* **Multi-Asset Radar:** Real-time scanning across `BNB/USDT`, `BTC/USDT`, `ETH/USDT`, `SOL/USDT`, `XRP/USDT`.
+* **Institutional Confluence Stack:**
+  - Order Book Depth Imbalance (OBI)
+  - ICT Fair Value Gaps (FVG)
+  - 50-EMA Macro Trend Filter
+  - Statistical Bollinger Band extremes
+  - Volume-Weighted Average Price (VWAP)
+* **Confidence Scoring (0% - 100%):** Displays exact Buy / Strong Buy / Sell recommendations with calculated Target TP (+0.8%) and Stop Loss (-0.6%) prices.
+* **1-Click Execution:** Instant bot launch on active signal coins.
 
 ---
 
-## 📊 2. Enhanced Metric Cards & Visual Explainers
+## ⚡ 2. Ultra-Fast Seconds Scalper Panel
 
-### A. Header Balance Deck
-- **Total Portfolio Value:** Free USDT + Market Value of open positions.
-- **Available Cash:** Free uncommitted USDT.
-- **Capital in Positions:** Total USDT locked in open spot trades.
-
-### B. Active Bot Instance Cards ([`app/page.tsx`](file:///d:/ReactProjects/botty/mybot/app/page.tsx))
-- **Configured Allocation Badge:** Displays exact trade size (e.g. `$10.00 USDT / Trade`).
-- **Scanning Explainer Banner (`IDLE`):** Explains that scanning is active and shows the committed budget ready for execution.
-- **Target & Risk Prices:**
-  - **Take Profit Target:** `+1.0%` with calculated Target Price (e.g. `$612.72`).
-  - **Stop Loss Limit:** `-0.5%` with calculated Stop Loss Price (e.g. `$603.62`).
-- **Open Position Math (`HOLDING`):**
-  - **Invested Entry Price** vs **Current Market Price**.
-  - **Asset Quantity Held** (e.g. `0.0164 BNB`).
-  - **Live Unrealized PnL** in USDT and %.
+* **Speed:** 2-second adaptive execution loop.
+* **Presets:** Lightning Micro-Scalper, Micro-Dip Hunter, Momentum Blitz.
+* **Safety Precautions:**
+  - Fee-Buffer Target (+0.35% minimum net profit protection).
+  - 3-Loss Circuit Breaker (60-second cooldown auto-pause).
+  - Spread Limit Gate (<0.08%).
 
 ---
 
@@ -51,20 +46,18 @@ When a bot is started, its status begins as **`🟢 SCANNING MARKET (IDLE)`**.
 🟡 TESTNET Account: ✅ 100% RESPONDING & AUTHENTICATED
    - API Key: kHPUwbtc...
    - Authenticated Balance: $10,000.00 USDT (Paper Money)
-   - Market Ticker Response: $606.61 (BNB/USDT)
-   - Private Auth Latency: 212ms
+   - Market Ticker Response: $606.24 (BNB/USDT)
 
 🟢 LIVE Mainnet Account: ✅ 100% RESPONDING & AUTHENTICATED
    - API Key: iPTbWkky...
    - Authenticated Balance: $0.00 USDT (Live Mainnet)
    - Market Ticker Response: $606.32 (BNB/USDT)
-   - Private Auth Latency: 215ms
 =======================================================
 ```
 
 ---
 
 ## 🧪 4. Testing & Build Verification
-
-- **Dual Account Response Test Script:** `test_both_accounts_response.js` executed — verified 100% authentication, private balance response, and market ticker pings for both TESTNET and LIVE.
-- **Production Build:** Command `npm run build` — **`✓ Compiled successfully`** (12/12 routes generated, 0 TypeScript errors).
+- **Dual Account Response Test Script:** `test_both_accounts_response.js` passed with 100% authentication.
+- **1-Minute Live Testnet Simulation:** `test_1min_live_testnet.js` executed live orders and recorded tick-by-tick PnL.
+- **Production Build:** Command `npm run build` — `✓ Compiled successfully`.

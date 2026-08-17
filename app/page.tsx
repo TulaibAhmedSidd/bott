@@ -3,6 +3,8 @@
 import { useEffect, useState, useRef } from 'react'
 import ConfigForm from '@/app/components/ConfigForm'
 import SafeStrategyTab from '@/app/components/SafeStrategyTab'
+import FastScalperTab from '@/app/components/FastScalperTab'
+import SignalsTab from '@/app/components/SignalsTab'
 
 type BotState = {
   symbol: string
@@ -54,7 +56,7 @@ export default function Dashboard() {
     usedUsdt?: number
   } | null>(null)
   const [trades, setTrades] = useState<Trade[]>([])
-  const [activeTab, setActiveTab] = useState<'SAFE' | 'CUSTOM' | 'BOTS' | 'TRADES'>('SAFE')
+  const [activeTab, setActiveTab] = useState<'SIGNALS' | 'SAFE' | 'FAST' | 'CUSTOM' | 'BOTS' | 'TRADES'>('SIGNALS')
   const [switchingMode, setSwitchingMode] = useState(false)
 
   const pollingRef = useRef(false)
@@ -128,11 +130,11 @@ export default function Dashboard() {
             <div className="min-w-0">
               <h1 className="text-xl sm:text-2xl font-black text-white tracking-tight flex items-center gap-2 truncate">
                 AlgoTrader Pro
-                <span className="text-[9px] uppercase font-bold tracking-widest text-orange-400 bg-orange-500/10 border border-orange-500/30 px-1.5 py-0.5 rounded-full shrink-0">
-                  v2.0 Safe Engine
+                <span className="text-[9px] uppercase font-bold tracking-widest text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 px-1.5 py-0.5 rounded-full shrink-0">
+                  AI Signals & Quant Engine
                 </span>
               </h1>
-              <p className="text-[11px] text-zinc-400 truncate">Binance Spot Quantitative Scalper</p>
+              <p className="text-[11px] text-zinc-400 truncate">Binance Confluence Signals & Automated Scalper</p>
             </div>
           </div>
 
@@ -201,10 +203,20 @@ export default function Dashboard() {
         
         {/* TABS CONTROLLER */}
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 border-b border-zinc-800 pb-4">
-          <div className="grid grid-cols-2 sm:flex bg-zinc-900/90 p-1.5 rounded-xl border border-zinc-800 gap-1 w-full sm:w-auto">
+          <div className="grid grid-cols-3 sm:flex bg-zinc-900/90 p-1.5 rounded-xl border border-zinc-800 gap-1 w-full sm:w-auto overflow-x-auto">
+            <button
+              onClick={() => setActiveTab('SIGNALS')}
+              className={`px-3 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 shrink-0 ${
+                activeTab === 'SIGNALS'
+                  ? 'bg-gradient-to-r from-emerald-500 to-green-500 text-black shadow-md shadow-emerald-950/40 font-black'
+                  : 'text-emerald-400 hover:text-white hover:bg-zinc-800/50'
+              }`}
+            >
+              <span>🎯</span> <span className="truncate">Live Signals</span>
+            </button>
             <button
               onClick={() => setActiveTab('SAFE')}
-              className={`px-3 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
+              className={`px-3 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 shrink-0 ${
                 activeTab === 'SAFE'
                   ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-black shadow-md'
                   : 'text-zinc-400 hover:text-white hover:bg-zinc-800/50'
@@ -213,18 +225,28 @@ export default function Dashboard() {
               <span>🛡️</span> <span className="truncate">Safe Strategies</span>
             </button>
             <button
+              onClick={() => setActiveTab('FAST')}
+              className={`px-3 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 shrink-0 ${
+                activeTab === 'FAST'
+                  ? 'bg-gradient-to-r from-amber-500 to-red-500 text-black shadow-md'
+                  : 'text-amber-400 hover:text-white hover:bg-zinc-800/50'
+              }`}
+            >
+              <span>⚡</span> <span className="truncate">Seconds Scalper</span>
+            </button>
+            <button
               onClick={() => setActiveTab('BOTS')}
-              className={`px-3 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
+              className={`px-3 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 shrink-0 ${
                 activeTab === 'BOTS'
                   ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-black shadow-md'
                   : 'text-zinc-400 hover:text-white hover:bg-zinc-800/50'
               }`}
             >
-              <span>⚡</span> <span className="truncate">Active Bots ({bots.length})</span>
+              <span>🤖</span> <span className="truncate">Active Bots ({bots.length})</span>
             </button>
             <button
               onClick={() => setActiveTab('CUSTOM')}
-              className={`px-3 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
+              className={`px-3 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 shrink-0 ${
                 activeTab === 'CUSTOM'
                   ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-black shadow-md'
                   : 'text-zinc-400 hover:text-white hover:bg-zinc-800/50'
@@ -234,7 +256,7 @@ export default function Dashboard() {
             </button>
             <button
               onClick={() => setActiveTab('TRADES')}
-              className={`px-3 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
+              className={`px-3 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 shrink-0 ${
                 activeTab === 'TRADES'
                   ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-black shadow-md'
                   : 'text-zinc-400 hover:text-white hover:bg-zinc-800/50'
@@ -273,6 +295,11 @@ export default function Dashboard() {
 
         {/* TAB PANELS */}
 
+        {/* TAB 0: LIVE AI & QUANT SIGNALS RADAR */}
+        {activeTab === 'SIGNALS' && (
+          <SignalsTab onExecute={() => { refresh(); setActiveTab('BOTS'); }} />
+        )}
+
         {/* TAB 1: SAFE STRATEGY */}
         {activeTab === 'SAFE' && (
           <div className="space-y-6">
@@ -286,7 +313,14 @@ export default function Dashboard() {
           </div>
         )}
 
-        {/* TAB 2: CUSTOM CONFIG */}
+        {/* TAB 2: SECONDS SCALPER */}
+        {activeTab === 'FAST' && (
+          <div className="space-y-6">
+            <FastScalperTab onSaved={() => { refresh(); setActiveTab('BOTS'); }} />
+          </div>
+        )}
+
+        {/* TAB 3: CUSTOM CONFIG */}
         {activeTab === 'CUSTOM' && (
           <div className="max-w-2xl mx-auto bg-zinc-900/70 border border-zinc-800 rounded-xl p-5 sm:p-6 shadow-xl">
             <h2 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
@@ -296,7 +330,7 @@ export default function Dashboard() {
           </div>
         )}
 
-        {/* TAB 3: ACTIVE BOTS */}
+        {/* TAB 4: ACTIVE BOTS */}
         {activeTab === 'BOTS' && (
           <div className="space-y-6">
             <h2 className="text-xl font-bold text-white flex items-center gap-2">
@@ -305,7 +339,7 @@ export default function Dashboard() {
 
             {bots.length === 0 ? (
               <div className="bg-zinc-900/40 border border-zinc-800 rounded-xl p-10 text-center text-zinc-500 text-sm">
-                No active bot loops running. Select <button onClick={() => setActiveTab('SAFE')} className="text-orange-400 font-bold underline">Safe Strategies</button> to launch one!
+                No active bot loops running. Select <button onClick={() => setActiveTab('SIGNALS')} className="text-emerald-400 font-bold underline">Live Signals</button> or <button onClick={() => setActiveTab('SAFE')} className="text-orange-400 font-bold underline">Safe Strategies</button> to launch one!
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-6">
@@ -490,7 +524,7 @@ export default function Dashboard() {
           </div>
         )}
 
-        {/* TAB 4: TRADE LEDGER */}
+        {/* TAB 5: TRADE LEDGER */}
         {activeTab === 'TRADES' && (
           <div className="bg-zinc-900/60 border border-zinc-800 rounded-xl p-4 sm:p-6 shadow-xl overflow-hidden">
             <h2 className="text-xl font-bold text-white mb-4">Trade Ledger & Audit Log</h2>
@@ -550,6 +584,8 @@ export default function Dashboard() {
                                 ? 'bg-emerald-950 text-emerald-400 border border-emerald-800'
                                 : t.reason === 'TRAILING_STOP'
                                 ? 'bg-amber-950 text-amber-400 border border-amber-800'
+                                : t.reason === 'BREAKEVEN_STOP'
+                                ? 'bg-blue-950 text-blue-400 border border-blue-800'
                                 : t.reason === 'STOP_LOSS'
                                 ? 'bg-rose-950 text-rose-400 border border-rose-800'
                                 : 'bg-zinc-800 text-zinc-400'

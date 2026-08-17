@@ -287,6 +287,8 @@ import { shouldBuy, shouldSell, getStrategyValue } from "./strategy"
 
 const loops: Record<string, boolean> = {}
 const peaks: Record<string, number> = {}
+const consecutiveLosses: Record<string, number> = {}
+const cooldownUntil: Record<string, number> = {}
 
 export async function startBot(symbol: string, mode: 'TESTNET' | 'LIVE') {
   if (loops[symbol]) return
@@ -316,7 +318,6 @@ export async function startBot(symbol: string, mode: 'TESTNET' | 'LIVE') {
     balanceAfter: 0
   })
 
-  // RESET Trade Count for this run
   if (startState) {
     startState.tradeCount = 0
     await startState.save()
@@ -324,7 +325,6 @@ export async function startBot(symbol: string, mode: 'TESTNET' | 'LIVE') {
 
   while (loops[symbol]) {
     try {
-      // Re-fetch state to check for STOP command (and Strategy updates)
       const state = await BotState.findOne({ symbol })
       if (!state || !state.isRunning) {
         loops[symbol] = false
@@ -337,6 +337,7 @@ export async function startBot(symbol: string, mode: 'TESTNET' | 'LIVE') {
       if (state.lastReset !== today) {
         state.dailyPnL = 0
         state.lastReset = today
+        consecutiveLosses[symbol] = 0
         await state.save()
       }
 
@@ -344,121 +345,156 @@ export async function startBot(symbol: string, mode: 'TESTNET' | 'LIVE') {
       const price = ticker.last!
       state.lastPrice = price
 
-      // STRATEGY: Fetch Candles (50 candles of 1m)
-      const candles = await exchange.fetchOHLCV(symbol, '1m', undefined, 50)
       const strategyName = state.strategy || 'BOLLINGER_RSI_EMA'
+      const isFastStrategy =
+        strategyName.startsWith('SECONDS_') ||
+        strategyName.startsWith('MICRO_') ||
+        strategyName === 'MOMENTUM_BLITZ'
 
-      // BUY LOGIC
-      if (state.status === 'IDLE') {
-        if (shouldBuy(candles, strategyName)) {
-          const rawQty = state.tradeUSDT / price
-          const formattedQty = formatOrderAmount(exchange, symbol, rawQty)
+      // Check Circuit Breaker Cooldown
+      const isCoolingDown = (cooldownUntil[symbol] || 0) > Date.now()
+      if (isCoolingDown && state.status === 'IDLE') {
+        const remainingSecs = Math.ceil((cooldownUntil[symbol] - Date.now()) / 1000)
+        state.indicatorValue = `🛡️ Circuit Breaker Active (${remainingSecs}s cooldown)`
+        await state.save()
+      } else {
+        // STRATEGY: Fetch Candles (50 candles of 1m)
+        const candles = await exchange.fetchOHLCV(symbol, '1m', undefined, 50)
 
-          if (formattedQty <= 0) {
-            console.warn(`[BOT ${symbol}] Formatted qty is 0. Trade USDT amount may be too small.`)
+        // BUY LOGIC
+        if (state.status === 'IDLE' && !isCoolingDown) {
+          if (shouldBuy(candles, strategyName)) {
+            // Check Spread Protection (< 0.08% spread allowable)
+            let isSpreadOk = true
+            if (ticker.bid && ticker.ask && ticker.bid > 0) {
+              const spreadPct = ((ticker.ask - ticker.bid) / ticker.bid) * 100
+              if (spreadPct > 0.08) {
+                isSpreadOk = false
+                console.warn(`[BOT ${symbol}] Spread too wide (${spreadPct.toFixed(3)}%). Skipping entry for safety.`)
+              }
+            }
+
+            if (isSpreadOk) {
+              const rawQty = state.tradeUSDT / price
+              const formattedQty = formatOrderAmount(exchange, symbol, rawQty)
+
+              if (formattedQty <= 0) {
+                console.warn(`[BOT ${symbol}] Formatted qty is 0. Trade USDT amount may be too small.`)
+              } else {
+                console.log(`[BOT ${symbol}] ${strategyName} BUY SIGNAL. Price=${price} Qty=${formattedQty}`)
+
+                let balBefore = 0
+                try {
+                  const b = await exchange.fetchBalance()
+                  balBefore = b?.total?.['USDT'] || 0
+                } catch {}
+
+                const order = await exchange.createMarketBuyOrder(symbol, formattedQty)
+                const filledPrice = order.average || order.price || price
+                const filledQty = order.filled || formattedQty
+
+                state.status = 'HOLDING'
+                state.entryPrice = filledPrice
+                state.quantity = filledQty
+                peaks[symbol] = filledPrice
+
+                await Trade.create({
+                  symbol,
+                  side: 'BUY',
+                  price: filledPrice,
+                  quantity: filledQty,
+                  entryPrice: filledPrice,
+                  strategy: strategyName,
+                  balanceBefore: balBefore
+                })
+                console.log(`[BOT ${symbol}] BUY EXECUTED. Filled Price=${filledPrice} Qty=${filledQty}`)
+              }
+            }
           } else {
-            console.log(`[BOT ${symbol}] ${strategyName} BUY SIGNAL. Price=${price} RawQty=${rawQty} FormattedQty=${formattedQty}`)
+            const val = getStrategyValue(candles, strategyName)
+            state.indicatorValue = val
+            await state.save()
+          }
+        }
 
-            let balBefore = 0
+        // HOLDING & SELL LOGIC
+        if (state.status === 'HOLDING') {
+          peaks[symbol] = Math.max(peaks[symbol] || state.entryPrice || price, price)
+
+          const sellSignal = shouldSell(
+            state.entryPrice!,
+            price,
+            state.targetPct,
+            state.stopLossPct,
+            peaks[symbol]
+          )
+
+          if (sellSignal) {
+            const reason = sellSignal
+            console.log(`[BOT ${symbol}] SELLING (${reason}): Price=${price} Entry=${state.entryPrice} Peak=${peaks[symbol]}`)
+
+            const sellQty = formatOrderAmount(exchange, symbol, state.quantity!)
+            const order = await exchange.createMarketSellOrder(symbol, sellQty)
+            const fillExitPrice = order.average || order.price || price
+
+            let finalBal = 0
             try {
               const b = await exchange.fetchBalance()
-              balBefore = b?.total?.['USDT'] || 0
+              finalBal = b?.total?.['USDT'] || 0
             } catch {}
 
-            const order = await exchange.createMarketBuyOrder(symbol, formattedQty)
-            const filledPrice = order.average || order.price || price
-            const filledQty = order.filled || formattedQty
+            const pnl = (fillExitPrice - state.entryPrice!) * sellQty
 
-            state.status = 'HOLDING'
-            state.entryPrice = filledPrice
-            state.quantity = filledQty
-            peaks[symbol] = filledPrice
+            state.status = 'IDLE'
+            state.realizedPnL += pnl
+            state.dailyPnL += pnl
+
+            const entryPrice = state.entryPrice!
+            const quantity = state.quantity!
+
+            state.entryPrice = undefined
+            state.quantity = undefined
+            delete peaks[symbol]
+
+            // Circuit Breaker tracking
+            if (pnl < 0) {
+              consecutiveLosses[symbol] = (consecutiveLosses[symbol] || 0) + 1
+              if (consecutiveLosses[symbol] >= 3) {
+                cooldownUntil[symbol] = Date.now() + 60 * 1000 // 60-second Circuit Breaker Cooldown
+                console.warn(`[BOT ${symbol}] 3 Consecutive Losses! Triggering 60s Circuit Breaker Cooldown.`)
+                consecutiveLosses[symbol] = 0
+              }
+            } else {
+              consecutiveLosses[symbol] = 0 // Reset on win
+            }
 
             await Trade.create({
               symbol,
-              side: 'BUY',
-              price: filledPrice,
-              quantity: filledQty,
-              entryPrice: filledPrice,
+              side: 'SELL',
+              price: fillExitPrice,
+              quantity: sellQty,
+              pnl,
+              reason,
+              entryPrice,
+              endedAt: new Date(),
               strategy: strategyName,
-              balanceBefore: balBefore
+              balanceAfter: finalBal
             })
-            console.log(`[BOT ${symbol}] BUY EXECUTED. Filled Price=${filledPrice} Qty=${filledQty}`)
-          }
-        } else {
-          const val = getStrategyValue(candles, strategyName)
-          console.log(`[BOT ${symbol}] WAITING (${strategyName}): ${val}`)
-          state.indicatorValue = val
-          await state.save()
-        }
-      }
 
-      // HOLDING & SELL LOGIC
-      if (state.status === 'HOLDING') {
-        // Track peak price for Trailing Stop-Loss
-        peaks[symbol] = Math.max(peaks[symbol] || state.entryPrice || price, price)
+            console.log(`[BOT ${symbol}] SELL EXECUTED (${reason}). PnL=${pnl.toFixed(4)} USDT`)
 
-        const sellSignal = shouldSell(
-          state.entryPrice!,
-          price,
-          state.targetPct,
-          state.stopLossPct,
-          peaks[symbol]
-        )
+            state.tradeCount = (state.tradeCount || 0) + 1
 
-        if (sellSignal) {
-          const reason = sellSignal
-          console.log(`[BOT ${symbol}] SELLING (${reason}): Price=${price} Entry=${state.entryPrice} Peak=${peaks[symbol]} PnL=${(((price - state.entryPrice!) / state.entryPrice!) * 100).toFixed(2)}%`)
-
-          const sellQty = formatOrderAmount(exchange, symbol, state.quantity!)
-          const order = await exchange.createMarketSellOrder(symbol, sellQty)
-          const fillExitPrice = order.average || order.price || price
-
-          let finalBal = 0
-          try {
-            const b = await exchange.fetchBalance()
-            finalBal = b?.total?.['USDT'] || 0
-          } catch {}
-
-          const pnl = (fillExitPrice - state.entryPrice!) * sellQty
-
-          state.status = 'IDLE'
-          state.realizedPnL += pnl
-          state.dailyPnL += pnl
-
-          const entryPrice = state.entryPrice!
-          const quantity = state.quantity!
-
-          state.entryPrice = undefined
-          state.quantity = undefined
-          delete peaks[symbol]
-
-          await Trade.create({
-            symbol,
-            side: 'SELL',
-            price: fillExitPrice,
-            quantity: sellQty,
-            pnl,
-            reason,
-            entryPrice,
-            endedAt: new Date(),
-            strategy: strategyName,
-            balanceAfter: finalBal
-          })
-
-          console.log(`[BOT ${symbol}] SELL EXECUTED (${reason}). PnL=${pnl.toFixed(4)} USDT`)
-
-          state.tradeCount = (state.tradeCount || 0) + 1
-
-          // STOP CONDITIONS
-          if (state.dailyPnL >= state.tradeUSDT * (state.targetPct / 100)) {
-            console.log(`[BOT ${symbol}] DAILY TARGET HIT. STOPPING.`)
-            state.isRunning = false
-            loops[symbol] = false
-          } else if (state.maxTrades && state.tradeCount >= state.maxTrades) {
-            console.log(`[BOT ${symbol}] MAX TRADES (${state.maxTrades}) HIT. STOPPING.`)
-            state.isRunning = false
-            loops[symbol] = false
+            // STOP CONDITIONS
+            if (state.dailyPnL >= state.tradeUSDT * (state.targetPct / 100)) {
+              console.log(`[BOT ${symbol}] DAILY TARGET HIT. STOPPING.`)
+              state.isRunning = false
+              loops[symbol] = false
+            } else if (state.maxTrades && state.tradeCount >= state.maxTrades) {
+              console.log(`[BOT ${symbol}] MAX TRADES (${state.maxTrades}) HIT. STOPPING.`)
+              state.isRunning = false
+              loops[symbol] = false
+            }
           }
         }
       }
@@ -468,14 +504,21 @@ export async function startBot(symbol: string, mode: 'TESTNET' | 'LIVE') {
       console.error(`[BOT ${symbol}] Error in loop:`, e)
     }
 
-    // 5-second tick interval (Safe against Binance rate limits)
-    await new Promise((r) => setTimeout(r, 5000))
+    // Adaptive Loop Interval: 2s for Seconds Strategies, 5s for Standard
+    const stateStrategy = (await BotState.findOne({ symbol }))?.strategy || 'BOLLINGER_RSI_EMA'
+    const isFast =
+      stateStrategy.startsWith('SECONDS_') ||
+      stateStrategy.startsWith('MICRO_') ||
+      stateStrategy === 'MOMENTUM_BLITZ'
+
+    await new Promise((r) => setTimeout(r, isFast ? 2000 : 5000))
   }
 }
 
 export async function stopBot(symbol: string) {
   loops[symbol] = false
   delete peaks[symbol]
+  delete cooldownUntil[symbol]
   await connectDB()
   const state = await BotState.findOneAndUpdate({ symbol }, { isRunning: false })
 
