@@ -49,9 +49,32 @@ export function shouldBuy(candles: any[], strategy: string = 'BOLLINGER_RSI_EMA'
 
   const regime = getMarketRegime(candles)
 
+  // 0. AUTO_COMPOUND_10PCT: 10% Target Day Reinvesting Cycler
+  if (strategy === 'AUTO_COMPOUND_10PCT') {
+    if (closes.length < 30) return false
+
+    // Flash Crash Protection Gate: If drop in last 5 candles > 4%, do not buy
+    const high5 = Math.max(...highs.slice(-5))
+    const drop5Pct = ((high5 - lastClose) / high5) * 100
+    if (drop5Pct >= 4.0) return false
+
+    const rsiSeries = RSI.calculate({ period: 14, values: closes })
+    const lastRSI = rsiSeries[rsiSeries.length - 1] || 50
+    const prevRSI = rsiSeries[rsiSeries.length - 2] || 50
+
+    const bbSeries = BollingerBands.calculate({ period: 20, stdDev: 2, values: closes })
+    const lastBB = bbSeries[bbSeries.length - 1]
+
+    // Buy when oversold dip turns upward or bullish momentum breakout
+    const isDipTurnUp = lastRSI <= 42 && lastRSI > prevRSI && lastClose >= prevClose
+    const isBBLowerBounce = lastBB ? lastClose <= lastBB.lower * 1.01 && lastClose > prevClose : false
+    const isMomentumReversal = lastClose > prevClose && prevClose > prev2Close && lastRSI > 45 && lastRSI < 65
+
+    return (isDipTurnUp || isBBLowerBounce || isMomentumReversal)
+  }
+
   // 1. SECONDS STRATEGY: LIGHTNING MICRO-SCALPER
   if (strategy === 'SECONDS_MICRO_SCALPER') {
-    // Quick micro-dip turn-up with rapid uptick momentum
     const isMicroUptick = lastClose > prevClose && prevClose <= prev2Close
     const bb = BollingerBands.calculate({ period: 14, stdDev: 1.8, values: closes })
     const lastBB = bb[bb.length - 1]
@@ -64,18 +87,14 @@ export function shouldBuy(candles: any[], strategy: string = 'BOLLINGER_RSI_EMA'
   if (strategy === 'MICRO_DIP_HUNTER') {
     const bb = BollingerBands.calculate({ period: 10, stdDev: 2, values: closes })
     const lastBB = bb[bb.length - 1]
-    const rsi = RSI.calculate({ period: 7, values: closes }) // 7-period fast RSI
-    const lastRSI = rsi[rsi.length - 1]
+    const isPiercingLower = lastBB ? lastClose <= lastBB.lower * 1.0015 : false
+    const isBouncingBack = lastClose > prevClose
 
-    const isOversoldDip = lastBB ? lastClose <= lastBB.lower * 1.001 : false
-    const isFastRsiOversold = lastRSI !== undefined && lastRSI <= 32
-
-    return (isOversoldDip || isFastRsiOversold) && lastClose >= prevClose
+    return isPiercingLower || (isBouncingBack && prevClose <= (lastBB?.lower || 0))
   }
 
   // 3. SECONDS STRATEGY: MOMENTUM BLITZ
   if (strategy === 'MOMENTUM_BLITZ') {
-    // 3 consecutive rising closes + volume expansion
     const is3Upticks = lastClose > prevClose && prevClose > prev2Close
     const isVolExpanding = lastVol >= prevVol * 1.1
 
@@ -140,15 +159,17 @@ export function shouldBuy(candles: any[], strategy: string = 'BOLLINGER_RSI_EMA'
     const prevEMA9 = ema9[ema9.length - 2]
     const prevEMA21 = ema21[ema21.length - 2]
 
-    const isBullishCross = lastEMA9 > lastEMA21 && prevEMA9 <= prevEMA21
-    const isTrending = regime.adx >= 23
+    if (!lastEMA9 || !lastEMA21 || !prevEMA9 || !prevEMA21) return false
 
-    return isBullishCross && isTrending && lastClose > prevClose
+    const isBullishCross = prevEMA9 <= prevEMA21 && lastEMA9 > lastEMA21
+    const isRSIBullish = (RSI.calculate({ period: 14, values: closes }).pop() || 50) >= 52
+
+    return isBullishCross && isRSIBullish && regime.isTrending
   }
 
   // 7. MACD
   if (strategy === 'MACD') {
-    const macdOutput = MACD.calculate({
+    const macdSeries = MACD.calculate({
       values: closes,
       fastPeriod: 12,
       slowPeriod: 26,
@@ -156,12 +177,12 @@ export function shouldBuy(candles: any[], strategy: string = 'BOLLINGER_RSI_EMA'
       SimpleMAOscillator: false,
       SimpleMASignal: false
     })
-    const last = macdOutput[macdOutput.length - 1]
-    const prev = macdOutput[macdOutput.length - 2]
+    if (macdSeries.length < 2) return false
+
+    const last = macdSeries[macdSeries.length - 1]
+    const prev = macdSeries[macdSeries.length - 2]
 
     return (
-      last &&
-      prev &&
       last.MACD !== undefined &&
       last.signal !== undefined &&
       prev.MACD !== undefined &&
@@ -202,23 +223,36 @@ export function shouldSell(
   price: number,
   target: number,
   stop: number,
-  peakPrice?: number
+  peakPrice?: number,
+  strategy?: string
 ): string | null {
   const pct = ((price - entry) / entry) * 100
 
   // 1. Take Profit Hit
   if (pct >= target) return 'TARGET'
 
-  // 2. Trailing & Breakeven Stop Logic
+  // 2. Compounding 10% Strategy Trailing Protection
+  if (strategy === 'AUTO_COMPOUND_10PCT' || target >= 5.0) {
+    if (peakPrice && peakPrice > entry) {
+      const maxPct = ((peakPrice - entry) / entry) * 100
+      // If reached +6%, move stop to +3% (lock in gain)
+      if (maxPct >= 6.0 && pct <= 3.0) {
+        return 'TRAILING_PROFIT_LOCK'
+      }
+    }
+    // Hard Stop Loss
+    if (pct <= -stop) return 'STOP_LOSS'
+    return null
+  }
+
+  // 3. Trailing & Breakeven Stop Logic for micro-scalpers
   if (peakPrice && peakPrice > entry) {
     const maxPct = ((peakPrice - entry) / entry) * 100
 
-    // Breakeven Protection: If position reached +0.35% / +0.5%, move stop to +0.1% (fees covered)
     if (maxPct >= 0.35 && pct <= 0.1) {
       return 'BREAKEVEN_STOP'
     }
 
-    // Dynamic Micro Trailing Stop: If peak was >= +0.25%, sell if price falls 0.15% from peak
     if (maxPct >= 0.25) {
       const dropFromPeakPct = ((peakPrice - price) / peakPrice) * 100
       if (dropFromPeakPct >= 0.15) {
@@ -227,7 +261,7 @@ export function shouldSell(
     }
   }
 
-  // 3. Hard Stop Loss Hit
+  // 4. Hard Stop Loss Hit
   if (pct <= -stop) return 'STOP_LOSS'
 
   return null
@@ -237,8 +271,11 @@ export function getStrategyValue(candles: any[], strategy: string = 'BOLLINGER_R
   if (!candles || candles.length === 0) return 'Loading...'
   const closes: number[] = candles.map((c: any) => (Array.isArray(c) ? c[4] : c.close))
   const lastClose = closes[closes.length - 1]
-  const regime = getMarketRegime(candles)
-  const regimeStr = regime.isTrending ? `Trend(ADX=${regime.adx.toFixed(0)})` : `Range(ADX=${regime.adx.toFixed(0)})`
+
+  if (strategy === 'AUTO_COMPOUND_10PCT') {
+    const rsi = RSI.calculate({ period: 14, values: closes }).pop() || 50
+    return `🔥 10% Compounding Engine | RSI: ${rsi.toFixed(1)} | Target: +10% | SL: -20%`
+  }
 
   if (strategy === 'SECONDS_MICRO_SCALPER') {
     const prevClose = closes[closes.length - 2] || lastClose
@@ -249,58 +286,14 @@ export function getStrategyValue(candles: any[], strategy: string = 'BOLLINGER_R
   if (strategy === 'MICRO_DIP_HUNTER') {
     const bb = BollingerBands.calculate({ period: 10, stdDev: 2, values: closes })
     const lastBB = bb[bb.length - 1]
-    return lastBB ? `DipLow=$${lastBB.lower.toFixed(2)} Price=$${lastClose.toFixed(2)}` : 'DipHunter (N/A)'
+    const dev = lastBB ? ((lastClose - lastBB.lower) / lastBB.lower) * 100 : 0
+    return `🌊 LowerBandDist=${dev.toFixed(2)}% [Dip Reversal]`
   }
 
   if (strategy === 'MOMENTUM_BLITZ') {
-    return `🚀 Momentum Surge [Fast 2s Loop]`
+    return `🚀 Momentum Surge Hunter [Blitz]`
   }
 
-  if (strategy === 'BOLLINGER_RSI_EMA' || strategy === 'MEAN_REVERSION') {
-    const rsiSeries = RSI.calculate({ period: 14, values: closes })
-    const bbSeries = BollingerBands.calculate({ period: 20, stdDev: 2, values: closes })
-    const lastRSI = rsiSeries[rsiSeries.length - 1]
-    const lastBB = bbSeries[bbSeries.length - 1]
-    return lastRSI && lastBB
-      ? `RSI=${lastRSI.toFixed(1)} LowBB=$${lastBB.lower.toFixed(2)} [${regimeStr}]`
-      : `B-RSI [${regimeStr}]`
-  }
-
-  if (strategy === 'VWAP') {
-    let num = 0
-    let den = 0
-    const slice = candles.slice(-20)
-    slice.forEach((c: any) => {
-      const high = Array.isArray(c) ? c[2] : c.high
-      const low = Array.isArray(c) ? c[3] : c.low
-      const close = Array.isArray(c) ? c[4] : c.close
-      const vol = Array.isArray(c) ? c[5] : c.volume
-      num += ((high + low + close) / 3) * vol
-      den += vol
-    })
-    const vwap = den > 0 ? num / den : lastClose
-    const dev = ((lastClose - vwap) / vwap) * 100
-    return `VWAP=$${vwap.toFixed(2)} Dev=${dev.toFixed(2)}% [${regimeStr}]`
-  }
-
-  if (strategy === 'TREND_MOMENTUM') {
-    return `Momentum [${regimeStr}]`
-  }
-
-  if (strategy === 'MACD') {
-    const macd = MACD.calculate({
-      values: closes,
-      fastPeriod: 12,
-      slowPeriod: 26,
-      signalPeriod: 9,
-      SimpleMAOscillator: false,
-      SimpleMASignal: false
-    })
-    const last = macd[macd.length - 1]
-    return last ? `MACD=${last.MACD?.toFixed(2)} Sig=${last.signal?.toFixed(2)} [${regimeStr}]` : `MACD [${regimeStr}]`
-  }
-
-  const rsi = RSI.calculate({ values: closes, period: 14 })
-  const lastRSI = rsi[rsi.length - 1]
-  return `RSI=${lastRSI ? lastRSI.toFixed(1) : 'N/A'} [${regimeStr}]`
+  const rsi = RSI.calculate({ values: closes, period: 14 }).pop() || 50
+  return `RSI: ${rsi.toFixed(1)}`
 }

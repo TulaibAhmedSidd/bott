@@ -6,6 +6,7 @@ import SafeStrategyTab from '@/app/components/SafeStrategyTab'
 import FastScalperTab from '@/app/components/FastScalperTab'
 import SignalsTab from '@/app/components/SignalsTab'
 import WalletAssetsTab from '@/app/components/WalletAssetsTab'
+import CompoundingDayTab from '@/app/components/CompoundingDayTab'
 
 type BotState = {
   symbol: string
@@ -57,7 +58,7 @@ export default function Dashboard() {
     usedUsdt?: number
   } | null>(null)
   const [trades, setTrades] = useState<Trade[]>([])
-  const [activeTab, setActiveTab] = useState<'SIGNALS' | 'SAFE' | 'FAST' | 'WALLET' | 'CUSTOM' | 'BOTS' | 'TRADES'>('SIGNALS')
+  const [activeTab, setActiveTab] = useState<'SIGNALS' | 'COMPOUND' | 'SAFE' | 'FAST' | 'WALLET' | 'CUSTOM' | 'BOTS' | 'TRADES'>('COMPOUND')
   const [currentMode, setCurrentMode] = useState<'TESTNET' | 'LIVE'>('TESTNET')
   const [switchingMode, setSwitchingMode] = useState(false)
 
@@ -240,6 +241,16 @@ export default function Dashboard() {
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 border-b border-zinc-800 pb-4">
           <div className="grid grid-cols-3 sm:flex bg-zinc-900/90 p-1.5 rounded-xl border border-zinc-800 gap-1 w-full sm:w-auto overflow-x-auto">
             <button
+              onClick={() => setActiveTab('COMPOUND')}
+              className={`px-3 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 shrink-0 ${
+                activeTab === 'COMPOUND'
+                  ? 'bg-gradient-to-r from-orange-500 via-amber-500 to-yellow-500 text-black shadow-md shadow-orange-950/40 font-black'
+                  : 'text-orange-400 hover:text-white hover:bg-zinc-800/50'
+              }`}
+            >
+              <span>🔥</span> <span className="truncate">10% Auto-Compounder</span>
+            </button>
+            <button
               onClick={() => setActiveTab('SIGNALS')}
               className={`px-3 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 shrink-0 ${
                 activeTab === 'SIGNALS'
@@ -340,7 +351,12 @@ export default function Dashboard() {
 
         {/* TAB PANELS */}
 
-        {/* TAB 0: LIVE AI & QUANT SIGNALS RADAR */}
+        {/* TAB 0: 10% AUTO-COMPOUNDING DAY RUNNER */}
+        {activeTab === 'COMPOUND' && (
+          <CompoundingDayTab availableUsdt={freeUsdt} onSaved={() => { refresh(); setActiveTab('BOTS'); }} />
+        )}
+
+        {/* TAB 1: LIVE AI & QUANT SIGNALS RADAR */}
         {activeTab === 'SIGNALS' && (
           <SignalsTab onExecute={() => { refresh(); setActiveTab('BOTS'); }} />
         )}

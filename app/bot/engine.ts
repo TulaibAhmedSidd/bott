@@ -426,7 +426,8 @@ export async function startBot(symbol: string, mode: 'TESTNET' | 'LIVE') {
             price,
             state.targetPct,
             state.stopLossPct,
-            peaks[symbol]
+            peaks[symbol],
+            strategyName
           )
 
           if (sellSignal) {
@@ -448,6 +449,13 @@ export async function startBot(symbol: string, mode: 'TESTNET' | 'LIVE') {
             state.status = 'IDLE'
             state.realizedPnL += pnl
             state.dailyPnL += pnl
+
+            // Auto-Compounding Logic for Continuous Day Runners:
+            if (strategyName === 'AUTO_COMPOUND_10PCT' && pnl > 0) {
+              const newBudget = Math.max(10, (state.tradeUSDT || 10) + pnl)
+              state.tradeUSDT = parseFloat(newBudget.toFixed(2))
+              console.log(`[BOT ${symbol}] 🔄 10% AUTO-COMPOUND REINVESTED: New Next Trade Budget = $${state.tradeUSDT} USDT`)
+            }
 
             const entryPrice = state.entryPrice!
             const quantity = state.quantity!
