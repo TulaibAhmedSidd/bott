@@ -8,7 +8,6 @@ import BotConfig from '@/app/models/BotConfig'
 import BotState from '@/app/models/BotState'
 import { getExchange } from '@/app/bot/exchange'
 
-// In-memory cache for balance to prevent hammering Binance rate limits
 let cachedBalance: { freeUsdt: number; totalUsdt: number; mode: string } | null = null
 let lastBalanceFetchTime = 0
 
@@ -16,11 +15,9 @@ export async function GET() {
   try {
     await connectDB()
 
-    // Fetch Config for Mode
     const config = await BotConfig.findOne()
     const mode = config?.tradingMode || (process.env.NEXT_PUBLIC_TRADING_MODE === 'test' ? 'TESTNET' : 'LIVE')
 
-    // Fetch all active or recent bots from DB
     const bots = await BotState.find({
       $or: [
         { isRunning: true },
@@ -29,7 +26,6 @@ export async function GET() {
       ]
     }).sort({ updatedAt: -1 })
 
-    // Map bots with safe defaults
     const formattedBots = bots.map((b) => {
       const obj = b.toObject()
       return {
@@ -41,7 +37,6 @@ export async function GET() {
       }
     })
 
-    // Calculate capital locked in active positions from active bots
     const usedUsdt = formattedBots.reduce((acc, bot) => {
       if (bot.status === 'HOLDING' && bot.quantity && bot.lastPrice) {
         return acc + bot.quantity * bot.lastPrice
@@ -53,20 +48,38 @@ export async function GET() {
     let totalPortfolioValue = 0
 
     const now = Date.now()
-    if (cachedBalance && cachedBalance.mode === mode && now - lastBalanceFetchTime < 3000) {
+    if (cachedBalance && cachedBalance.mode === mode && now - lastBalanceFetchTime < 4000) {
       freeUsdt = cachedBalance.freeUsdt
       totalPortfolioValue = cachedBalance.totalUsdt
     } else {
       try {
         const exchange = await getExchange(mode as 'TESTNET' | 'LIVE')
-        // Timeout balance fetch after 2500ms
-        const balPromise = exchange.fetchBalance()
-        const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 2500))
-        const balRes: any = await Promise.race([balPromise, timeoutPromise])
+        const balRes = await exchange.fetchBalance()
 
         if (balRes) {
           freeUsdt = balRes.free?.['USDT'] ?? balRes.total?.['USDT'] ?? 0
-          totalPortfolioValue = (balRes.total?.['USDT'] ?? freeUsdt) + usedUsdt
+          totalPortfolioValue = balRes.total?.['USDT'] ?? freeUsdt
+
+          // For LIVE mode, calculate total asset value across primary holdings (e.g. SOL, BTC, ETH, BNB)
+          if (mode === 'LIVE' && balRes.total) {
+            const majorCoins = ['SOL', 'BTC', 'ETH', 'BNB', 'XRP', 'ADA', 'TRX', 'LINK', 'LTC']
+            for (const coin of majorCoins) {
+              const amount = balRes.total[coin]
+              if (typeof amount === 'number' && amount > 0.0001) {
+                try {
+                  const pair = `${coin}/USDT`
+                  if (exchange.markets && exchange.markets[pair]) {
+                    const ticker = await exchange.fetchTicker(pair)
+                    if (ticker?.last) {
+                      totalPortfolioValue += amount * ticker.last
+                    }
+                  }
+                } catch {}
+              }
+            }
+          }
+
+          totalPortfolioValue += usedUsdt
 
           cachedBalance = {
             freeUsdt,
