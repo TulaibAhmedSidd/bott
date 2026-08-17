@@ -439,8 +439,13 @@ export default function Dashboard() {
                             <span>🔍</span> Market Scanning Active
                           </div>
                           <div>
-                            Allocated Budget: <span className="font-bold text-white">${tradeUSDT.toFixed(2)} USDT</span>. USDT balance will decrease when strategy triggers a BUY order.
+                            Allocated Trade Size: <span className="font-bold text-white">${tradeUSDT.toFixed(2)} USDT</span>. USDT balance will decrease when strategy triggers a BUY order.
                           </div>
+                          {freeUsdt < tradeUSDT && (
+                            <div className="text-amber-300 text-[10px] bg-amber-950/40 p-1 rounded border border-amber-800/40 mt-1">
+                              ⚠️ Wallet USDT (${freeUsdt.toFixed(2)}) is less than trade size (${tradeUSDT.toFixed(2)}). Fund wallet before buy order fires.
+                            </div>
+                          )}
                         </div>
                       )}
 

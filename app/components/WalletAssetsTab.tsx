@@ -9,8 +9,19 @@ type AssetBalance = {
   total: number;
 };
 
+type AccountInfo = {
+  accountType: string;
+  canTrade: boolean;
+  canWithdraw: boolean;
+  canDeposit: boolean;
+  makerCommission: string;
+  takerCommission: string;
+  apiKeyMasked: string;
+};
+
 export default function WalletAssetsTab({ mode }: { mode: string }) {
   const [assets, setAssets] = useState<AssetBalance[]>([]);
+  const [accountInfo, setAccountInfo] = useState<AccountInfo | null>(null);
   const [totalCount, setTotalCount] = useState(0);
   const [freeUSDT, setFreeUSDT] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -24,6 +35,9 @@ export default function WalletAssetsTab({ mode }: { mode: string }) {
         setAssets(res.assets);
         setTotalCount(res.totalAssetsCount || res.assets.length);
         setFreeUSDT(res.freeUSDT || 0);
+        if (res.accountInfo) {
+          setAccountInfo(res.accountInfo);
+        }
       }
     } catch (e) {
       console.error("Failed to load wallet balances:", e);
@@ -42,31 +56,63 @@ export default function WalletAssetsTab({ mode }: { mode: string }) {
 
   return (
     <div className="space-y-6">
+      {/* Account Verification & Identity Card */}
+      {accountInfo && (
+        <div className="bg-gradient-to-r from-blue-950/40 via-zinc-900 to-zinc-900 border border-blue-500/40 rounded-xl p-4 sm:p-5 shadow-lg shadow-blue-950/20">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-b border-zinc-800 pb-3 mb-3">
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-xl">🛡️</span>
+                <h3 className="text-lg font-bold text-white">Verified Binance Account Identity</h3>
+                <span className="text-[10px] bg-blue-500/20 text-blue-400 border border-blue-500/30 px-2 py-0.5 rounded-full font-mono">
+                  {mode === "LIVE" ? "🟢 Live Binance Mainnet" : "🟡 Testnet Sandbox"}
+                </span>
+              </div>
+              <p className="text-xs text-zinc-400 mt-0.5">
+                Cryptographically authenticated via Binance REST API.
+              </p>
+            </div>
+
+            <div className="font-mono text-xs text-zinc-300 bg-black/60 px-3 py-1.5 rounded-lg border border-zinc-800">
+              Active Key: <span className="text-amber-400 font-bold">{accountInfo.apiKeyMasked}</span>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-xs font-mono">
+            <div className="bg-black/40 border border-zinc-800/80 p-2.5 rounded-lg">
+              <span className="text-[10px] text-zinc-500 block uppercase">Account Type</span>
+              <span className="text-white font-bold">{accountInfo.accountType}</span>
+            </div>
+            <div className="bg-black/40 border border-zinc-800/80 p-2.5 rounded-lg">
+              <span className="text-[10px] text-zinc-500 block uppercase">Trading Permission</span>
+              <span className="text-emerald-400 font-bold">{accountInfo.canTrade ? "✓ Authorized" : "Disabled"}</span>
+            </div>
+            <div className="bg-black/40 border border-zinc-800/80 p-2.5 rounded-lg">
+              <span className="text-[10px] text-zinc-500 block uppercase">Spot Fee Rate</span>
+              <span className="text-zinc-200 font-bold">{accountInfo.takerCommission}</span>
+            </div>
+            <div className="bg-black/40 border border-zinc-800/80 p-2.5 rounded-lg">
+              <span className="text-[10px] text-zinc-500 block uppercase">Verified Holdings</span>
+              <span className="text-amber-400 font-bold">{totalCount} Coins</span>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Header Info */}
       <div className="bg-zinc-900/80 border border-zinc-800 rounded-xl p-4 sm:p-5 flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-4">
         <div>
-          <div className="flex items-center gap-2">
-            <h3 className="text-xl font-bold text-white flex items-center gap-2">
-              💼 Binance Spot Wallet Breakdown
-            </h3>
-            <span
-              className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full border ${
-                mode === "LIVE"
-                  ? "bg-emerald-950 text-emerald-400 border-emerald-700"
-                  : "bg-amber-950 text-amber-400 border-amber-700"
-              }`}
-            >
-              {mode === "LIVE" ? "🟢 LIVE ACCOUNT" : "🟡 TESTNET ACCOUNT"}
-            </span>
-          </div>
+          <h3 className="text-xl font-bold text-white flex items-center gap-2">
+            💼 Binance Spot Wallet Breakdown
+          </h3>
           <p className="text-xs text-zinc-400 mt-1">
-            Real-time balance breakdown of your authenticated Binance spot wallet coins.
+            Real-time balance breakdown of all assets currently residing in your Binance wallet.
           </p>
         </div>
 
         <div className="flex items-center gap-3">
           <div className="bg-black/60 border border-zinc-800 px-3 py-1.5 rounded-lg text-right">
-            <div className="text-[10px] text-zinc-500 font-bold uppercase">Free USDT</div>
+            <div className="text-[10px] text-zinc-500 font-bold uppercase">Free Available USDT</div>
             <div className="text-sm font-mono font-bold text-emerald-400">
               ${freeUSDT.toFixed(4)} USDT
             </div>
