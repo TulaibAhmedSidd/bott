@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 
 type SignalData = {
   symbol: string;
@@ -21,26 +21,34 @@ export default function SignalsTab({ onExecute }: { onExecute: () => void }) {
   const [loading, setLoading] = useState(true);
   const [executingSymbol, setExecutingSymbol] = useState<string | null>(null);
 
+  const isFetchingRef = useRef(false);
+
   const fetchSignals = async () => {
+    // If one signal request is already pending, DO NOT send another
+    if (isFetchingRef.current) return;
+    isFetchingRef.current = true;
+
     try {
       const res = await fetch("/api/signals").then((r) => r.json());
-      if (Array.isArray(res.signals)) {
+      if (Array.isArray(res.signals) && res.signals.length > 0) {
         setSignals(res.signals);
       }
     } catch (e) {
       console.error("Failed to load signals:", e);
     } finally {
       setLoading(false);
+      isFetchingRef.current = false;
     }
   };
 
   useEffect(() => {
     fetchSignals();
-    const interval = setInterval(fetchSignals, 4000);
+    const interval = setInterval(fetchSignals, 6000);
     return () => clearInterval(interval);
   }, []);
 
   const handleExecuteSignal = async (sig: SignalData) => {
+    if (executingSymbol) return; // Prevent double-clicking
     setExecutingSymbol(sig.symbol);
     try {
       // 1. Configure Bot with Signal's Pre-Calculated Targets

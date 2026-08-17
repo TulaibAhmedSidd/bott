@@ -8,22 +8,46 @@ import { getExchange } from '@/app/bot/exchange'
 import connectDB from '@/app/mongodb'
 import BotConfig from '@/app/models/BotConfig'
 
+let cachedSignals: any[] = []
+let lastSignalsFetchTime = 0
+let isScanning = false
+
 export async function GET() {
   try {
+    const now = Date.now()
+
+    // 1. If cached within 5 seconds, return immediately
+    if (cachedSignals.length > 0 && now - lastSignalsFetchTime < 5000) {
+      return NextResponse.json({
+        signals: cachedSignals,
+        cached: true,
+        updatedAt: new Date(lastSignalsFetchTime).toISOString()
+      })
+    }
+
+    // 2. Prevent concurrent scan pile-ups
+    if (isScanning && cachedSignals.length > 0) {
+      return NextResponse.json({
+        signals: cachedSignals,
+        cached: true,
+        updatedAt: new Date(lastSignalsFetchTime).toISOString()
+      })
+    }
+
+    isScanning = true
     await connectDB()
     const config = await BotConfig.findOne()
     const mode = config?.tradingMode || 'TESTNET'
     const exchange = await getExchange(mode as 'TESTNET' | 'LIVE')
 
     const symbols = ['BNB/USDT', 'BTC/USDT', 'ETH/USDT', 'SOL/USDT', 'XRP/USDT']
-    const signalResults = []
 
-    for (const sym of symbols) {
+    const symbolPromises = symbols.map(async (sym) => {
       try {
         const [ticker, orderbook, ohlcv] = await Promise.all([
           exchange.fetchTicker(sym),
-          exchange.fetchOrderBook(sym, 20),
-          exchange.fetchOHLCV(sym, '1m', undefined, 50)
+          exchange.fetchOrderBook(sym, 15),
+          exchange.fetchOHLCV(sym, '1m', undefined, 40)
         ])
 
         const closes = ohlcv.map((c: any) => (Array.isArray(c) ? c[4] : c.close))
@@ -103,10 +127,10 @@ export async function GET() {
 
         if (lastBB && lastClose <= lastBB.lower * 1.002) {
           score += 15
-          reasons.push('Statistical Lower Bollinger Pierce')
+          reasons.push('Lower Bollinger Band Pierce')
         } else if (lastBB && lastClose >= lastBB.upper * 0.998) {
           score -= 15
-          reasons.push('Statistical Upper Bollinger Pierce')
+          reasons.push('Upper Bollinger Band Pierce')
         }
 
         if (bidRatio >= 60) {
@@ -119,7 +143,7 @@ export async function GET() {
 
         if (vwapDev <= -0.5) {
           score += 10
-          reasons.push(`VWAP Institutional Discount (${vwapDev.toFixed(2)}%)`)
+          reasons.push(`VWAP Discount (${vwapDev.toFixed(2)}%)`)
         } else if (vwapDev >= 0.5) {
           score -= 10
           reasons.push(`VWAP Premium (+${vwapDev.toFixed(2)}%)`)
@@ -136,7 +160,7 @@ export async function GET() {
         else if (score <= 25) action = 'STRONG_SELL'
         else if (score <= 40) action = 'SELL'
 
-        signalResults.push({
+        return {
           symbol: sym,
           price: lastClose,
           score,
@@ -148,18 +172,27 @@ export async function GET() {
           adx: lastADX,
           bidRatio,
           vwapDev
-        })
+        }
       } catch (err) {
-        console.warn(`[SIGNALS API] Error on ${sym}:`, (err as any)?.message)
+        return null
       }
+    })
+
+    const results = (await Promise.all(symbolPromises)).filter(Boolean)
+    if (results.length > 0) {
+      cachedSignals = results
+      lastSignalsFetchTime = Date.now()
     }
 
+    isScanning = false
+
     return NextResponse.json({
-      signals: signalResults,
-      updatedAt: new Date().toISOString()
+      signals: cachedSignals,
+      updatedAt: new Date(lastSignalsFetchTime).toISOString()
     })
   } catch (error) {
+    isScanning = false
     console.error('[SIGNALS API ERROR]:', error)
-    return NextResponse.json({ signals: [], error: (error as any)?.message }, { status: 200 })
+    return NextResponse.json({ signals: cachedSignals, error: (error as any)?.message }, { status: 200 })
   }
 }

@@ -59,26 +59,35 @@ export default function Dashboard() {
   const [activeTab, setActiveTab] = useState<'SIGNALS' | 'SAFE' | 'FAST' | 'CUSTOM' | 'BOTS' | 'TRADES'>('SIGNALS')
   const [switchingMode, setSwitchingMode] = useState(false)
 
-  const pollingRef = useRef(false)
+  // Single in-flight lock for status & trade polling
+  const isRefreshingRef = useRef(false)
 
   const refresh = async () => {
-    if (pollingRef.current) return
-    pollingRef.current = true
+    if (isRefreshingRef.current) return
+    isRefreshingRef.current = true
+
     try {
-      const s = await fetch('/api/status').then((r) => r.json())
-      const t = await fetch('/api/trades').then((r) => r.json())
-      if (s) setData(s)
-      if (Array.isArray(t)) setTrades(t)
+      const [sRes, tRes] = await Promise.allSettled([
+        fetch('/api/status', { cache: 'no-store' }).then((r) => r.json()),
+        fetch('/api/trades', { cache: 'no-store' }).then((r) => r.json())
+      ])
+
+      if (sRes.status === 'fulfilled' && sRes.value) {
+        setData(sRes.value)
+      }
+      if (tRes.status === 'fulfilled' && Array.isArray(tRes.value)) {
+        setTrades(tRes.value)
+      }
     } catch (e) {
       console.error('Failed to fetch dashboard data:', e)
     } finally {
-      pollingRef.current = false
+      isRefreshingRef.current = false
     }
   }
 
   useEffect(() => {
     refresh()
-    const interval = setInterval(refresh, 2000)
+    const interval = setInterval(refresh, 2500)
     return () => clearInterval(interval)
   }, [])
 
@@ -96,6 +105,7 @@ export default function Dashboard() {
   const activeBotsCount = bots.filter((b) => b.isRunning).length
 
   const handleModeSwitch = async () => {
+    if (switchingMode) return
     const newMode = mode === 'TESTNET' ? 'LIVE' : 'TESTNET'
     if (!confirm(`Switch trading mode to ${newMode}?`)) return
 
