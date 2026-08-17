@@ -58,22 +58,30 @@ export default function Dashboard() {
   } | null>(null)
   const [trades, setTrades] = useState<Trade[]>([])
   const [activeTab, setActiveTab] = useState<'SIGNALS' | 'SAFE' | 'FAST' | 'WALLET' | 'CUSTOM' | 'BOTS' | 'TRADES'>('SIGNALS')
+  const [currentMode, setCurrentMode] = useState<'TESTNET' | 'LIVE'>('TESTNET')
   const [switchingMode, setSwitchingMode] = useState(false)
 
   const isRefreshingRef = useRef(false)
+  const currentModeRef = useRef(currentMode)
+  currentModeRef.current = currentMode
 
-  const refresh = async () => {
+  const refresh = async (explicitMode?: string) => {
     if (isRefreshingRef.current) return
     isRefreshingRef.current = true
 
+    const targetMode = explicitMode || currentModeRef.current
+
     try {
       const [sRes, tRes] = await Promise.allSettled([
-        fetch('/api/status', { cache: 'no-store' }).then((r) => r.json()),
-        fetch('/api/trades', { cache: 'no-store' }).then((r) => r.json())
+        fetch(`/api/status?mode=${targetMode}`, { cache: 'no-store' }).then((r) => r.json()),
+        fetch(`/api/trades?mode=${targetMode}`, { cache: 'no-store' }).then((r) => r.json())
       ])
 
       if (sRes.status === 'fulfilled' && sRes.value) {
         setData(sRes.value)
+        if (sRes.value.mode) {
+          setCurrentMode(sRes.value.mode)
+        }
       }
       if (tRes.status === 'fulfilled' && Array.isArray(tRes.value)) {
         setTrades(tRes.value)
@@ -87,12 +95,12 @@ export default function Dashboard() {
 
   useEffect(() => {
     refresh()
-    const interval = setInterval(refresh, 2500)
+    const interval = setInterval(() => refresh(), 2500)
     return () => clearInterval(interval)
   }, [])
 
   const bots = data?.bots || []
-  const mode = data?.mode || 'TESTNET'
+  const mode = currentMode
   const totalBalance = typeof data?.totalBalance === 'number' ? data.totalBalance : 0
   const freeUsdt = typeof data?.freeUsdt === 'number' ? data.freeUsdt : totalBalance
   const usedUsdt = typeof data?.usedUsdt === 'number' ? data.usedUsdt : 0
@@ -110,6 +118,7 @@ export default function Dashboard() {
     if (!confirm(`Switch trading mode to ${newMode}?`)) return
 
     setSwitchingMode(true)
+    setCurrentMode(newMode)
     setData((prev) => (prev ? { ...prev, mode: newMode } : { bots: [], mode: newMode, totalBalance: 0 }))
 
     try {
@@ -118,7 +127,7 @@ export default function Dashboard() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ tradingMode: newMode })
       })
-      await refresh()
+      await refresh(newMode)
     } catch (e) {
       console.error('Failed to switch mode:', e)
     } finally {
@@ -432,7 +441,7 @@ export default function Dashboard() {
                         )}
                       </div>
 
-                      {/* EXPLANATION BANNER (WHY BALANCE IS NOT DEDUCTED YET IF IDLE) */}
+                      {/* EXPLANATION BANNER */}
                       {isIdle && bot.isRunning && (
                         <div className="bg-zinc-950/80 border border-zinc-800/80 rounded-lg p-2.5 my-2.5 text-[11px] text-zinc-400 space-y-1">
                           <div className="text-amber-400 font-bold flex items-center gap-1">

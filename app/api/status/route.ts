@@ -2,7 +2,7 @@ export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 export const fetchCache = 'force-no-store'
 
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import connectDB from '@/app/mongodb'
 import BotConfig from '@/app/models/BotConfig'
 import BotState from '@/app/models/BotState'
@@ -11,12 +11,15 @@ import { getExchange } from '@/app/bot/exchange'
 let cachedBalance: { freeUsdt: number; totalUsdt: number; mode: string } | null = null
 let lastBalanceFetchTime = 0
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
     await connectDB()
 
     const config = await BotConfig.findOne()
-    const mode = config?.tradingMode || (process.env.NEXT_PUBLIC_TRADING_MODE === 'test' ? 'TESTNET' : 'LIVE')
+    const queryMode = req.nextUrl.searchParams.get('mode')
+    const mode = (queryMode === 'LIVE' || queryMode === 'TESTNET')
+      ? queryMode
+      : (config?.tradingMode || 'TESTNET')
 
     const bots = await BotState.find({
       $or: [
@@ -48,7 +51,7 @@ export async function GET() {
     let totalPortfolioValue = 0
 
     const now = Date.now()
-    if (cachedBalance && cachedBalance.mode === mode && now - lastBalanceFetchTime < 4000) {
+    if (cachedBalance && cachedBalance.mode === mode && now - lastBalanceFetchTime < 3000) {
       freeUsdt = cachedBalance.freeUsdt
       totalPortfolioValue = cachedBalance.totalUsdt
     } else {
@@ -60,7 +63,7 @@ export async function GET() {
           freeUsdt = balRes.free?.['USDT'] ?? balRes.total?.['USDT'] ?? 0
           totalPortfolioValue = balRes.total?.['USDT'] ?? freeUsdt
 
-          // For LIVE mode, calculate total asset value across primary holdings (e.g. SOL, BTC, ETH, BNB)
+          // For LIVE mode, calculate total asset value across holdings (e.g. SOL, BTC, ETH, BNB)
           if (mode === 'LIVE' && balRes.total) {
             const majorCoins = ['SOL', 'BTC', 'ETH', 'BNB', 'XRP', 'ADA', 'TRX', 'LINK', 'LTC']
             for (const coin of majorCoins) {
@@ -112,7 +115,7 @@ export async function GET() {
     return NextResponse.json(
       {
         bots: [],
-        mode: 'TESTNET',
+        mode: req.nextUrl.searchParams.get('mode') || 'TESTNET',
         freeUsdt: 0,
         usedUsdt: 0,
         totalBalance: 0,

@@ -7,6 +7,7 @@ type AssetBalance = {
   free: number;
   used: number;
   total: number;
+  usdtValue?: number;
 };
 
 type AccountInfo = {
@@ -24,17 +25,19 @@ export default function WalletAssetsTab({ mode }: { mode: string }) {
   const [accountInfo, setAccountInfo] = useState<AccountInfo | null>(null);
   const [totalCount, setTotalCount] = useState(0);
   const [freeUSDT, setFreeUSDT] = useState(0);
+  const [totalEstPortfolioUSDT, setTotalEstPortfolioUSDT] = useState(0);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
 
   const fetchWallet = async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/wallet", { cache: "no-store" }).then((r) => r.json());
+      const res = await fetch(`/api/wallet?mode=${mode}`, { cache: "no-store" }).then((r) => r.json());
       if (Array.isArray(res.assets)) {
         setAssets(res.assets);
         setTotalCount(res.totalAssetsCount || res.assets.length);
         setFreeUSDT(res.freeUSDT || 0);
+        setTotalEstPortfolioUSDT(res.totalEstPortfolioUSDT || res.freeUSDT || 0);
         if (res.accountInfo) {
           setAccountInfo(res.accountInfo);
         }
@@ -64,7 +67,13 @@ export default function WalletAssetsTab({ mode }: { mode: string }) {
               <div className="flex items-center gap-2">
                 <span className="text-xl">🛡️</span>
                 <h3 className="text-lg font-bold text-white">Verified Binance Account Identity</h3>
-                <span className="text-[10px] bg-blue-500/20 text-blue-400 border border-blue-500/30 px-2 py-0.5 rounded-full font-mono">
+                <span
+                  className={`text-[10px] border px-2 py-0.5 rounded-full font-mono font-bold ${
+                    mode === "LIVE"
+                      ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/30"
+                      : "bg-amber-500/20 text-amber-300 border-amber-500/30"
+                  }`}
+                >
                   {mode === "LIVE" ? "🟢 Live Binance Mainnet" : "🟡 Testnet Sandbox"}
                 </span>
               </div>
@@ -85,7 +94,7 @@ export default function WalletAssetsTab({ mode }: { mode: string }) {
             </div>
             <div className="bg-black/40 border border-zinc-800/80 p-2.5 rounded-lg">
               <span className="text-[10px] text-zinc-500 block uppercase">Trading Permission</span>
-              <span className="text-emerald-400 font-bold">{accountInfo.canTrade ? "✓ Authorized" : "Disabled"}</span>
+              <span className="text-emerald-400 font-bold">{accountInfo.canTrade ? "✓ Authorized (Active)" : "Disabled"}</span>
             </div>
             <div className="bg-black/40 border border-zinc-800/80 p-2.5 rounded-lg">
               <span className="text-[10px] text-zinc-500 block uppercase">Spot Fee Rate</span>
@@ -112,8 +121,15 @@ export default function WalletAssetsTab({ mode }: { mode: string }) {
 
         <div className="flex items-center gap-3">
           <div className="bg-black/60 border border-zinc-800 px-3 py-1.5 rounded-lg text-right">
-            <div className="text-[10px] text-zinc-500 font-bold uppercase">Free Available USDT</div>
+            <div className="text-[10px] text-zinc-500 font-bold uppercase">Total Portfolio Est.</div>
             <div className="text-sm font-mono font-bold text-emerald-400">
+              ${totalEstPortfolioUSDT.toFixed(2)} USDT
+            </div>
+          </div>
+
+          <div className="bg-black/60 border border-zinc-800 px-3 py-1.5 rounded-lg text-right">
+            <div className="text-[10px] text-zinc-500 font-bold uppercase">Free Cash</div>
+            <div className="text-sm font-mono font-bold text-zinc-300">
               ${freeUSDT.toFixed(4)} USDT
             </div>
           </div>
@@ -132,7 +148,7 @@ export default function WalletAssetsTab({ mode }: { mode: string }) {
       <div className="flex justify-between items-center gap-3">
         <input
           type="text"
-          placeholder="🔍 Search coin (e.g. USDT, BNB, BTC, ETH)..."
+          placeholder="🔍 Search coin (e.g. USDT, BNB, BTC, ETH, SOL)..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           className="bg-black/60 border border-zinc-700 focus:border-orange-500 rounded-xl px-3.5 py-2 text-xs text-white outline-none w-full sm:w-80 transition-all font-mono"
@@ -157,7 +173,7 @@ export default function WalletAssetsTab({ mode }: { mode: string }) {
             <div
               key={i}
               className={`p-4 rounded-xl border transition-all ${
-                item.asset === "USDT" || item.asset === "BNB" || item.asset === "BTC" || item.asset === "ETH"
+                item.asset === "USDT" || item.asset === "BNB" || item.asset === "BTC" || item.asset === "ETH" || item.asset === "SOL"
                   ? "bg-zinc-900 border-zinc-700 shadow-md ring-1 ring-zinc-800"
                   : "bg-zinc-950/80 border-zinc-850 hover:border-zinc-800"
               }`}
@@ -167,7 +183,14 @@ export default function WalletAssetsTab({ mode }: { mode: string }) {
                   <div className="w-7 h-7 rounded-lg bg-zinc-800 flex items-center justify-center text-xs font-bold text-amber-400 border border-zinc-700">
                     {item.asset.slice(0, 3)}
                   </div>
-                  <span className="font-bold text-white text-base">{item.asset}</span>
+                  <div>
+                    <span className="font-bold text-white text-base block">{item.asset}</span>
+                    {typeof item.usdtValue === 'number' && item.usdtValue > 0 && (
+                      <span className="text-[11px] font-mono text-emerald-400 font-bold">
+                        ≈ ${item.usdtValue.toFixed(2)} USDT
+                      </span>
+                    )}
+                  </div>
                 </div>
                 {item.asset === "USDT" && (
                   <span className="text-[9px] uppercase font-bold text-emerald-400 bg-emerald-950 px-2 py-0.5 rounded border border-emerald-800">
@@ -183,7 +206,9 @@ export default function WalletAssetsTab({ mode }: { mode: string }) {
                 </div>
                 <div className="flex justify-between text-zinc-500 text-[11px]">
                   <span>In Orders:</span>
-                  <span>{item.used.toFixed(item.used < 1 ? 6 : 2)}</span>
+                  <span className={item.used > 0 ? "text-amber-400 font-bold" : ""}>
+                    {item.used.toFixed(item.used < 1 ? 6 : 2)}
+                  </span>
                 </div>
                 <div className="flex justify-between text-zinc-300 pt-1.5 border-t border-zinc-800/80 font-bold">
                   <span>Total Holding:</span>
