@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 
 type AssetBalance = {
   asset: string;
@@ -29,8 +29,13 @@ export default function WalletAssetsTab({ mode }: { mode: string }) {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
 
+  const isFetchingRef = useRef(false);
+
   const fetchWallet = async () => {
+    if (isFetchingRef.current) return;
+    isFetchingRef.current = true;
     setLoading(true);
+
     try {
       const res = await fetch(`/api/wallet?mode=${mode}`, { cache: "no-store" }).then((r) => r.json());
       if (Array.isArray(res.assets)) {
@@ -46,6 +51,7 @@ export default function WalletAssetsTab({ mode }: { mode: string }) {
       console.error("Failed to load wallet balances:", e);
     } finally {
       setLoading(false);
+      isFetchingRef.current = false;
     }
   };
 
@@ -137,7 +143,7 @@ export default function WalletAssetsTab({ mode }: { mode: string }) {
           <button
             onClick={fetchWallet}
             disabled={loading}
-            className="px-3 py-2 bg-zinc-800 hover:bg-zinc-700 text-white rounded-lg text-xs font-bold transition-all border border-zinc-700 flex items-center gap-1.5 shrink-0"
+            className="px-3 py-2 bg-zinc-800 hover:bg-zinc-700 text-white rounded-lg text-xs font-bold transition-all border border-zinc-700 flex items-center gap-1.5 shrink-0 cursor-pointer"
           >
             <span>🔄</span> {loading ? "Syncing..." : "Refresh"}
           </button>

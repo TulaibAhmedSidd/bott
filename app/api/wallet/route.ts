@@ -7,15 +7,23 @@ import connectDB from '@/app/mongodb'
 import BotConfig from '@/app/models/BotConfig'
 import { getExchange } from '@/app/bot/exchange'
 
+let cachedWallet: { data: any; timestamp: number; mode: string } | null = null
+
 export async function GET(req: NextRequest) {
   try {
-    await connectDB()
-    const config = await BotConfig.findOne()
-
     const queryMode = req.nextUrl.searchParams.get('mode')
-    const mode = (queryMode === 'LIVE' || queryMode === 'TESTNET')
-      ? queryMode
-      : (config?.tradingMode || 'TESTNET')
+    let mode = queryMode === 'LIVE' || queryMode === 'TESTNET' ? queryMode : null
+
+    if (!mode) {
+      await connectDB()
+      const config = await BotConfig.findOne()
+      mode = config?.tradingMode || 'TESTNET'
+    }
+
+    const now = Date.now()
+    if (cachedWallet && cachedWallet.mode === mode && now - cachedWallet.timestamp < 4000) {
+      return NextResponse.json(cachedWallet.data)
+    }
 
     const exchange = await getExchange(mode as 'TESTNET' | 'LIVE')
     const balRes = await exchange.fetchBalance()
@@ -45,33 +53,45 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    // Fetch live market prices for top non-stable assets (e.g. SOL, BTC, ETH, BNB)
-    for (const item of assets) {
-      if (item.usdtValue === 0 && exchange.markets && exchange.markets[`${item.asset}/USDT`]) {
-        try {
-          const ticker = await exchange.fetchTicker(`${item.asset}/USDT`)
-          if (ticker && ticker.last) {
-            item.usdtValue = item.total * ticker.last
-          }
-        } catch {}
-      }
-      totalEstUSDT += item.usdtValue
-    }
-
-    // Sort by USD value descending, putting highest-value coins first
-    assets.sort((a, b) => b.usdtValue - a.usdtValue)
-
     const freeUSDT = balRes?.free?.['USDT'] ?? balRes?.total?.['USDT'] ?? 0
-    if (mode === 'TESTNET' && totalEstUSDT === 0) {
-      totalEstUSDT = freeUSDT
+
+    if (mode === 'LIVE') {
+      // In LIVE mode, fetch price only for top major non-stable holdings in parallel
+      const topNonStable = assets.filter(a => a.usdtValue === 0 && a.total > 0.0001).slice(0, 5)
+      await Promise.all(
+        topNonStable.map(async (item) => {
+          try {
+            const pair = `${item.asset}/USDT`
+            if (exchange.markets && exchange.markets[pair]) {
+              const ticker = await exchange.fetchTicker(pair)
+              if (ticker?.last) {
+                item.usdtValue = item.total * ticker.last
+              }
+            }
+          } catch {}
+        })
+      )
     }
+
+    totalEstUSDT = assets.reduce((sum, a) => sum + (a.usdtValue || 0), 0)
+    if (totalEstUSDT === 0 || mode === 'TESTNET') {
+      totalEstUSDT = (balRes?.total?.['USDT'] ?? freeUSDT) || freeUSDT
+    }
+
+    // Sort: USDT first, then by usdtValue, then by total amount
+    assets.sort((a, b) => {
+      if (a.asset === 'USDT') return -1
+      if (b.asset === 'USDT') return 1
+      if (b.usdtValue !== a.usdtValue) return (b.usdtValue || 0) - (a.usdtValue || 0)
+      return b.total - a.total
+    })
 
     const info = balRes?.info || {}
     const activeKey = (exchange as any).apiKey
       ? `${(exchange as any).apiKey.slice(0, 8)}...${(exchange as any).apiKey.slice(-4)}`
       : 'Connected'
 
-    return NextResponse.json({
+    const result = {
       mode,
       freeUSDT,
       totalEstPortfolioUSDT: totalEstUSDT,
@@ -87,7 +107,15 @@ export async function GET(req: NextRequest) {
         apiKeyMasked: activeKey
       },
       assets: assets.slice(0, 50)
-    })
+    }
+
+    cachedWallet = {
+      data: result,
+      timestamp: now,
+      mode
+    }
+
+    return NextResponse.json(result)
   } catch (error) {
     console.error('[WALLET API ERROR]:', error)
     return NextResponse.json(
