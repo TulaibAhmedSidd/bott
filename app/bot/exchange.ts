@@ -1,23 +1,4 @@
-// // src/bot/exchange.ts
-// import ccxt from 'ccxt'
-
-// export const exchange = new ccxt.binance({
-// //   apiKey: process.env.BINANCE_API_KEY,
-// //   secret: process.env.BINANCE_API_SECRET,
-//   apiKey: process.env.NEXT_PUBLIC_TEST_BINANCE_API_KEY,
-//   secret: process.env.NEXT_PUBLIC_TEST_BINANCE_API_SECRET,
-//   enableRateLimit: true,
-//   options: {
-//     defaultType: 'spot'
-//   },
-//   urls: {
-//     api: {
-//       public: 'https://testnet.binance.vision/api',
-//       private: 'https://testnet.binance.vision/api'
-//     }
-//   }
-// })
-
+// src/bot/exchange.ts
 const exchanges: Record<string, any> = {}
 
 export async function getExchange(mode: 'TESTNET' | 'LIVE' = 'TESTNET') {
@@ -26,15 +7,19 @@ export async function getExchange(mode: 'TESTNET' | 'LIVE' = 'TESTNET') {
   const ccxt = await import('ccxt')
   const isTest = mode === 'TESTNET'
 
-  console.log(`[EXCHANGE] Initializing ${mode} mode...`)
+  const apiKey = isTest
+    ? process.env.TEST_BINANCE_API_KEY || process.env.NEXT_PUBLIC_TEST_BINANCE_API_KEY
+    : process.env.BINANCE_API_KEY || process.env.NEXT_PUBLIC_BINANCE_API_KEY
+
+  const secret = isTest
+    ? process.env.TEST_BINANCE_API_SECRET || process.env.NEXT_PUBLIC_TEST_BINANCE_API_SECRET
+    : process.env.BINANCE_API_SECRET || process.env.NEXT_PUBLIC_BINANCE_API_SECRET
+
+  console.log(`[EXCHANGE] Initializing ${mode} mode (Key: ${apiKey ? apiKey.slice(0, 8) + '...' : 'MISSING'})...`)
 
   const instance = new ccxt.binance({
-    apiKey: isTest
-      ? process.env.NEXT_PUBLIC_TEST_BINANCE_API_KEY
-      : process.env.NEXT_PUBLIC_BINANCE_API_KEY,
-    secret: isTest
-      ? process.env.NEXT_PUBLIC_TEST_BINANCE_API_SECRET
-      : process.env.NEXT_PUBLIC_BINANCE_API_SECRET,
+    apiKey,
+    secret,
     sandbox: isTest,
     enableRateLimit: true,
     options: {
@@ -81,4 +66,3 @@ export function formatOrderAmount(exchange: any, symbol: string, rawQty: number)
   }
   return parseFloat(rawQty.toFixed(5))
 }
-

@@ -5,6 +5,7 @@ import ConfigForm from '@/app/components/ConfigForm'
 import SafeStrategyTab from '@/app/components/SafeStrategyTab'
 import FastScalperTab from '@/app/components/FastScalperTab'
 import SignalsTab from '@/app/components/SignalsTab'
+import WalletAssetsTab from '@/app/components/WalletAssetsTab'
 
 type BotState = {
   symbol: string
@@ -56,10 +57,9 @@ export default function Dashboard() {
     usedUsdt?: number
   } | null>(null)
   const [trades, setTrades] = useState<Trade[]>([])
-  const [activeTab, setActiveTab] = useState<'SIGNALS' | 'SAFE' | 'FAST' | 'CUSTOM' | 'BOTS' | 'TRADES'>('SIGNALS')
+  const [activeTab, setActiveTab] = useState<'SIGNALS' | 'SAFE' | 'FAST' | 'WALLET' | 'CUSTOM' | 'BOTS' | 'TRADES'>('SIGNALS')
   const [switchingMode, setSwitchingMode] = useState(false)
 
-  // Single in-flight lock for status & trade polling
   const isRefreshingRef = useRef(false)
 
   const refresh = async () => {
@@ -144,7 +144,7 @@ export default function Dashboard() {
                   AI Signals & Quant Engine
                 </span>
               </h1>
-              <p className="text-[11px] text-zinc-400 truncate">Binance Confluence Signals & Automated Scalper</p>
+              <p className="text-[11px] text-zinc-400 truncate">Binance Spot Confluence & Live Wallet Viewer</p>
             </div>
           </div>
 
@@ -223,6 +223,16 @@ export default function Dashboard() {
               }`}
             >
               <span>🎯</span> <span className="truncate">Live Signals</span>
+            </button>
+            <button
+              onClick={() => setActiveTab('WALLET')}
+              className={`px-3 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 shrink-0 ${
+                activeTab === 'WALLET'
+                  ? 'bg-gradient-to-r from-blue-500 to-indigo-500 text-white shadow-md shadow-blue-950/40 font-black'
+                  : 'text-blue-400 hover:text-white hover:bg-zinc-800/50'
+              }`}
+            >
+              <span>💼</span> <span className="truncate">Binance Wallet</span>
             </button>
             <button
               onClick={() => setActiveTab('SAFE')}
@@ -310,7 +320,12 @@ export default function Dashboard() {
           <SignalsTab onExecute={() => { refresh(); setActiveTab('BOTS'); }} />
         )}
 
-        {/* TAB 1: SAFE STRATEGY */}
+        {/* TAB 1: BINANCE WALLET ASSETS BREAKDOWN */}
+        {activeTab === 'WALLET' && (
+          <WalletAssetsTab mode={mode} />
+        )}
+
+        {/* TAB 2: SAFE STRATEGY */}
         {activeTab === 'SAFE' && (
           <div className="space-y-6">
             <div className="bg-zinc-900/40 border border-zinc-800 rounded-xl p-3.5 flex items-start gap-2.5">
@@ -323,14 +338,14 @@ export default function Dashboard() {
           </div>
         )}
 
-        {/* TAB 2: SECONDS SCALPER */}
+        {/* TAB 3: SECONDS SCALPER */}
         {activeTab === 'FAST' && (
           <div className="space-y-6">
             <FastScalperTab onSaved={() => { refresh(); setActiveTab('BOTS'); }} />
           </div>
         )}
 
-        {/* TAB 3: CUSTOM CONFIG */}
+        {/* TAB 4: CUSTOM CONFIG */}
         {activeTab === 'CUSTOM' && (
           <div className="max-w-2xl mx-auto bg-zinc-900/70 border border-zinc-800 rounded-xl p-5 sm:p-6 shadow-xl">
             <h2 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
@@ -340,7 +355,7 @@ export default function Dashboard() {
           </div>
         )}
 
-        {/* TAB 4: ACTIVE BOTS */}
+        {/* TAB 5: ACTIVE BOTS */}
         {activeTab === 'BOTS' && (
           <div className="space-y-6">
             <h2 className="text-xl font-bold text-white flex items-center gap-2">
@@ -349,7 +364,7 @@ export default function Dashboard() {
 
             {bots.length === 0 ? (
               <div className="bg-zinc-900/40 border border-zinc-800 rounded-xl p-10 text-center text-zinc-500 text-sm">
-                No active bot loops running. Select <button onClick={() => setActiveTab('SIGNALS')} className="text-emerald-400 font-bold underline">Live Signals</button> or <button onClick={() => setActiveTab('SAFE')} className="text-orange-400 font-bold underline">Safe Strategies</button> to launch one!
+                No active bot loops running. Select <button onClick={() => setActiveTab('SIGNALS')} className="text-emerald-400 font-bold underline">Live Signals</button>, <button onClick={() => setActiveTab('SAFE')} className="text-orange-400 font-bold underline">Safe Strategies</button>, or <button onClick={() => setActiveTab('WALLET')} className="text-blue-400 font-bold underline">Binance Wallet</button> to get started!
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-6">
@@ -534,7 +549,7 @@ export default function Dashboard() {
           </div>
         )}
 
-        {/* TAB 5: TRADE LEDGER */}
+        {/* TAB 6: TRADE LEDGER */}
         {activeTab === 'TRADES' && (
           <div className="bg-zinc-900/60 border border-zinc-800 rounded-xl p-4 sm:p-6 shadow-xl overflow-hidden">
             <h2 className="text-xl font-bold text-white mb-4">Trade Ledger & Audit Log</h2>
