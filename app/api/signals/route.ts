@@ -1,6 +1,7 @@
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 export const fetchCache = 'force-no-store'
+export const preferredRegion = ['fra1', 'sin1', 'lhr1']
 
 import { NextResponse } from 'next/server'
 import { RSI, BollingerBands, EMA, ADX } from 'technicalindicators'
