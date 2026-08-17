@@ -11,17 +11,27 @@ export default function CompoundingDayTab({
 }) {
   const [selectedPair, setSelectedPair] = useState("XRP/USDT");
   const [tradeUSDT, setTradeUSDT] = useState(availableUsdt >= 10 ? Math.floor(availableUsdt) : 11);
-  const [targetPct] = useState(10.0);
-  const [stopLossPct] = useState(20.0);
+  const [targetPct, setTargetPct] = useState(10.0);
+  const [stopLossPct, setStopLossPct] = useState(20.0);
   const [loading, setLoading] = useState(false);
 
-  // Math compounding projection steps
-  const cycle1 = tradeUSDT * 1.10;
-  const cycle2 = cycle1 * 1.10;
-  const cycle3 = cycle2 * 1.10;
-  const cycle4 = cycle3 * 1.10;
+  // Dynamic Compounding projection based on user's custom target percentage
+  const multiplier = 1 + targetPct / 100;
+  const cycle1 = tradeUSDT * multiplier;
+  const cycle2 = cycle1 * multiplier;
+  const cycle3 = cycle2 * multiplier;
+  const cycle4 = cycle3 * multiplier;
 
   const launchCompoundBot = async () => {
+    if (targetPct <= 0 || targetPct > 100) {
+      alert("Target percentage must be between 1% and 100%.");
+      return;
+    }
+    if (stopLossPct <= 0 || stopLossPct > 50) {
+      alert("Stop loss percentage must be between 1% and 50%.");
+      return;
+    }
+
     setLoading(true);
     try {
       // 1. Save Config
@@ -64,14 +74,14 @@ export default function CompoundingDayTab({
           <div className="space-y-1">
             <div className="flex items-center gap-2 flex-wrap">
               <h3 className="text-lg font-bold text-white">
-                Continuous 10% Auto-Compounding Day Runner
+                Continuous Auto-Compounding Day Runner
               </h3>
               <span className="text-[10px] bg-orange-500/20 text-orange-300 border border-orange-500/40 px-2.5 py-0.5 rounded-full font-mono font-bold">
-                24/7 Auto-Reinvesting Engine
+                Target: +{targetPct}% | SL: -{stopLossPct}%
               </span>
             </div>
             <p className="text-xs text-zinc-300 leading-relaxed">
-              Buys high-probability dips, takes profit at <strong>+10.0%</strong>, and automatically rolls your full principal + profit into the next cycle. Continues running uninterrupted until you stop it or emergency flash-crash cutoff triggers.
+              Buys high-probability dips, locks in your custom <strong>+{targetPct}%</strong> gain, and immediately rolls your compounded balance into the next cycle. Continues running uninterrupted until you stop it or market crash trigger is hit.
             </p>
           </div>
         </div>
@@ -81,40 +91,40 @@ export default function CompoundingDayTab({
       <div className="bg-zinc-900/80 border border-zinc-800 rounded-xl p-5 space-y-3 shadow-lg">
         <div className="flex justify-between items-center border-b border-zinc-800 pb-2.5">
           <span className="text-xs font-bold uppercase tracking-wider text-zinc-400">
-            📈 Projected 10% Compounding Ladder (Starting with ${tradeUSDT.toFixed(2)} USDT)
+            📈 Projected Compounding Ladder (+{targetPct}% / Cycle starting with ${tradeUSDT.toFixed(2)} USDT)
           </span>
           <span className="text-[11px] font-mono text-emerald-400 font-bold">
-            Target: +10% / Cycle | SL: -20%
+            +{((cycle4 - tradeUSDT) / tradeUSDT * 100).toFixed(1)}% Gain Across 4 Cycles
           </span>
         </div>
 
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs font-mono">
           <div className="bg-black/60 border border-zinc-800 p-3 rounded-lg">
-            <div className="text-[10px] text-zinc-500 uppercase">Cycle 1 Exit</div>
+            <div className="text-[10px] text-zinc-500 uppercase">Cycle 1 Exit (+{targetPct}%)</div>
             <div className="text-emerald-400 font-bold text-base mt-0.5">${cycle1.toFixed(2)} USDT</div>
             <div className="text-[10px] text-zinc-400">+${(cycle1 - tradeUSDT).toFixed(2)} net gain</div>
           </div>
           <div className="bg-black/60 border border-zinc-800 p-3 rounded-lg">
-            <div className="text-[10px] text-zinc-500 uppercase">Cycle 2 Exit</div>
+            <div className="text-[10px] text-zinc-500 uppercase">Cycle 2 Exit (+{targetPct}%)</div>
             <div className="text-emerald-400 font-bold text-base mt-0.5">${cycle2.toFixed(2)} USDT</div>
             <div className="text-[10px] text-zinc-400">+${(cycle2 - tradeUSDT).toFixed(2)} net gain</div>
           </div>
           <div className="bg-black/60 border border-zinc-800 p-3 rounded-lg">
-            <div className="text-[10px] text-zinc-500 uppercase">Cycle 3 Exit</div>
+            <div className="text-[10px] text-zinc-500 uppercase">Cycle 3 Exit (+{targetPct}%)</div>
             <div className="text-emerald-400 font-bold text-base mt-0.5">${cycle3.toFixed(2)} USDT</div>
             <div className="text-[10px] text-zinc-400">+${(cycle3 - tradeUSDT).toFixed(2)} net gain</div>
           </div>
           <div className="bg-black/60 border border-zinc-800 p-3 rounded-lg">
-            <div className="text-[10px] text-zinc-500 uppercase">Cycle 4 Exit</div>
+            <div className="text-[10px] text-zinc-500 uppercase">Cycle 4 Exit (+{targetPct}%)</div>
             <div className="text-emerald-400 font-bold text-base mt-0.5">${cycle4.toFixed(2)} USDT</div>
             <div className="text-[10px] text-zinc-400">+${(cycle4 - tradeUSDT).toFixed(2)} net gain</div>
           </div>
         </div>
       </div>
 
-      {/* Configuration & Launch Panel */}
+      {/* Configuration & Launch Panel with Editable Target & Stop Loss */}
       <div className="bg-zinc-900/90 border border-zinc-800 rounded-xl p-5 sm:p-6 space-y-5 shadow-xl">
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           
           {/* Pair Select */}
           <div>
@@ -126,11 +136,12 @@ export default function CompoundingDayTab({
               onChange={(e) => setSelectedPair(e.target.value)}
               className="w-full bg-black/60 border border-zinc-700 focus:border-orange-500 rounded-lg px-3 py-2.5 text-white font-medium text-sm outline-none transition-all font-mono"
             >
-              <option value="XRP/USDT">XRP / USDT (High Volatility)</option>
-              <option value="BNB/USDT">BNB / USDT (Deep Liquidity)</option>
-              <option value="SOL/USDT">SOL / USDT (Fast Swings)</option>
-              <option value="BTC/USDT">BTC / USDT (Major)</option>
-              <option value="ETH/USDT">ETH / USDT (Major)</option>
+              <option value="XRP/USDT">XRP / USDT</option>
+              <option value="BNB/USDT">BNB / USDT</option>
+              <option value="SOL/USDT">SOL / USDT</option>
+              <option value="BTC/USDT">BTC / USDT</option>
+              <option value="ETH/USDT">ETH / USDT</option>
+              <option value="ADA/USDT">ADA / USDT</option>
             </select>
           </div>
 
@@ -176,15 +187,91 @@ export default function CompoundingDayTab({
             </div>
           </div>
 
-          {/* Risk Specs */}
+          {/* Editable Take Profit Target */}
           <div>
-            <label className="text-xs font-semibold text-zinc-400 uppercase tracking-wider block mb-1.5">
-              Target & Stop Rules
-            </label>
-            <div className="bg-black/60 border border-zinc-800 rounded-lg px-3 py-2 text-xs font-mono text-zinc-300 flex items-center justify-between">
-              <span className="text-emerald-400 font-bold">TP: +10.0%</span>
-              <span className="text-rose-400 font-bold">SL: -20.0%</span>
-              <span className="text-amber-400 text-[10px]">Crash Guard: 5%</span>
+            <div className="flex justify-between items-center mb-1.5">
+              <label className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">
+                Take Profit Target (%)
+              </label>
+              <span className="text-[10px] text-emerald-400 font-bold font-mono">+{targetPct}%</span>
+            </div>
+            <div className="relative">
+              <input
+                type="number"
+                step="0.5"
+                min="1"
+                max="50"
+                value={targetPct}
+                onChange={(e) => setTargetPct(Math.max(1, +e.target.value))}
+                className="w-full bg-black/60 border border-zinc-700 focus:border-emerald-500 rounded-lg px-3 py-2.5 text-white font-medium text-sm outline-none transition-all pr-28 font-mono"
+              />
+              <div className="absolute right-1.5 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => setTargetPct(5)}
+                  className="px-1.5 py-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded text-[10px] font-bold font-mono transition-colors"
+                >
+                  5%
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTargetPct(10)}
+                  className="px-1.5 py-1 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/30 rounded text-[10px] font-bold font-mono transition-colors"
+                >
+                  10%
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTargetPct(15)}
+                  className="px-1.5 py-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded text-[10px] font-bold font-mono transition-colors"
+                >
+                  15%
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Editable Stop Loss Limit */}
+          <div>
+            <div className="flex justify-between items-center mb-1.5">
+              <label className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">
+                Stop Loss Limit (%)
+              </label>
+              <span className="text-[10px] text-rose-400 font-bold font-mono">-{stopLossPct}%</span>
+            </div>
+            <div className="relative">
+              <input
+                type="number"
+                step="0.5"
+                min="1"
+                max="50"
+                value={stopLossPct}
+                onChange={(e) => setStopLossPct(Math.max(1, +e.target.value))}
+                className="w-full bg-black/60 border border-zinc-700 focus:border-rose-500 rounded-lg px-3 py-2.5 text-white font-medium text-sm outline-none transition-all pr-28 font-mono"
+              />
+              <div className="absolute right-1.5 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => setStopLossPct(10)}
+                  className="px-1.5 py-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded text-[10px] font-bold font-mono transition-colors"
+                >
+                  10%
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setStopLossPct(15)}
+                  className="px-1.5 py-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded text-[10px] font-bold font-mono transition-colors"
+                >
+                  15%
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setStopLossPct(20)}
+                  className="px-1.5 py-1 bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/30 rounded text-[10px] font-bold font-mono transition-colors"
+                >
+                  20%
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -195,13 +282,13 @@ export default function CompoundingDayTab({
             <span>🛡️</span> Continuous Auto-Cycling Rules:
           </div>
           <p>
-            1. Upon reaching <strong>+10% profit</strong> (e.g. $11.00 ➔ $12.10), the bot executes a market sell and automatically locks in profit.
+            1. Upon reaching your target of <strong>+{targetPct}%</strong>, the bot executes a market sell and locks in profit.
           </p>
           <p>
-            2. It immediately resets to <strong>`SCANNING MARKET`</strong> and enters the next signal using the new grown budget ($12.10 ➔ $13.31 ➔ $14.64).
+            2. It immediately resets to <strong>`SCANNING MARKET`</strong> and enters the next signal using the new grown budget.
           </p>
           <p>
-            3. If a sudden market flash crash occurs (&gt; 5% rapid drop in 5 mins), the bot halts to protect remaining capital.
+            3. If price falls by <strong>-{stopLossPct}%</strong> or a sudden market dump occurs (&gt; 4% drop in 5 mins), the safety cutoff halts the trade.
           </p>
         </div>
 
@@ -216,7 +303,7 @@ export default function CompoundingDayTab({
           ) : (
             <>
               <span>🔥</span>
-              <span>Launch 10% Auto-Compounding Bot ({selectedPair})</span>
+              <span>Launch Auto-Compounding Bot (+{targetPct}% Target / -{stopLossPct}% SL) on {selectedPair}</span>
             </>
           )}
         </button>
