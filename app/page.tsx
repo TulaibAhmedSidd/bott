@@ -65,6 +65,17 @@ export default function Dashboard() {
   const currentModeRef = useRef(currentMode)
   currentModeRef.current = currentMode
 
+  // Load saved preference on initial mount
+  useEffect(() => {
+    try {
+      const savedMode = localStorage.getItem('algo_trading_mode') as 'TESTNET' | 'LIVE' | null
+      if (savedMode === 'LIVE' || savedMode === 'TESTNET') {
+        setCurrentMode(savedMode)
+        currentModeRef.current = savedMode
+      }
+    } catch {}
+  }, [])
+
   const refresh = async (explicitMode?: string) => {
     if (isRefreshingRef.current) return
     isRefreshingRef.current = true
@@ -78,9 +89,9 @@ export default function Dashboard() {
       ])
 
       if (sRes.status === 'fulfilled' && sRes.value) {
-        setData(sRes.value)
-        if (sRes.value.mode) {
-          setCurrentMode(sRes.value.mode)
+        // Only accept the response if it matches the current active targetMode to prevent race condition flips
+        if (sRes.value.mode === currentModeRef.current) {
+          setData(sRes.value)
         }
       }
       if (tRes.status === 'fulfilled' && Array.isArray(tRes.value)) {
@@ -119,6 +130,11 @@ export default function Dashboard() {
 
     setSwitchingMode(true)
     setCurrentMode(newMode)
+    currentModeRef.current = newMode
+    try {
+      localStorage.setItem('algo_trading_mode', newMode)
+    } catch {}
+
     setData((prev) => (prev ? { ...prev, mode: newMode } : { bots: [], mode: newMode, totalBalance: 0 }))
 
     try {
