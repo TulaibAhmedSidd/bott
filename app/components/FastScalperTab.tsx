@@ -2,7 +2,13 @@
 
 import { useState } from "react";
 
-export default function FastScalperTab({ onSaved }: { onSaved: () => void }) {
+export default function FastScalperTab({
+  onSaved,
+  availableUsdt = 0
+}: {
+  onSaved: () => void;
+  availableUsdt?: number;
+}) {
   const [selectedPair, setSelectedPair] = useState("BNB/USDT");
   const [tradeUSDT, setTradeUSDT] = useState(10);
   const [selectedPreset, setSelectedPreset] = useState<"SECONDS_MICRO_SCALPER" | "MICRO_DIP_HUNTER" | "MOMENTUM_BLITZ">("SECONDS_MICRO_SCALPER");
@@ -60,7 +66,6 @@ export default function FastScalperTab({ onSaved }: { onSaved: () => void }) {
   const launchFastBot = async () => {
     setLoading(true);
     try {
-      // 1. Save Config
       await fetch("/api/config", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -75,7 +80,6 @@ export default function FastScalperTab({ onSaved }: { onSaved: () => void }) {
         })
       });
 
-      // 2. Start Bot
       await fetch("/api/start", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -111,7 +115,6 @@ export default function FastScalperTab({ onSaved }: { onSaved: () => void }) {
 
       {/* Preset Strategy Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        
         {/* Preset 1 */}
         <div
           onClick={() => setSelectedPreset("SECONDS_MICRO_SCALPER")}
@@ -121,19 +124,17 @@ export default function FastScalperTab({ onSaved }: { onSaved: () => void }) {
               : "bg-zinc-900/60 border-zinc-800 hover:border-zinc-700"
           }`}
         >
-          <div className="flex justify-between items-start mb-2">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-amber-400 bg-amber-500/20 px-2 py-0.5 rounded-full border border-amber-500/30">
+          <div className="flex justify-between items-start mb-2.5">
+            <span className="text-xs font-bold text-amber-400 uppercase tracking-wider">
               ⚡ Ultra-Fast
             </span>
-            <span className="text-[10px] font-mono text-emerald-400 font-bold bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-800">
+            <span className="text-[10px] font-mono font-bold bg-amber-950/80 text-amber-300 border border-amber-800 px-2 py-0.5 rounded-full">
               +0.35% TP / -0.25% SL
             </span>
           </div>
-          <h3 className="text-base sm:text-lg font-bold text-white mt-1">Lightning Micro-Scalper</h3>
-          <div className="text-[10px] font-bold text-amber-400 mt-0.5">{presets.SECONDS_MICRO_SCALPER.badge}</div>
-          <p className="text-xs text-zinc-400 mt-1 line-clamp-2">
-            {presets.SECONDS_MICRO_SCALPER.desc}
-          </p>
+          <h4 className="text-base font-bold text-white mb-1.5">{presets.SECONDS_MICRO_SCALPER.name}</h4>
+          <p className="text-xs text-zinc-400 leading-relaxed mb-3">{presets.SECONDS_MICRO_SCALPER.desc}</p>
+          <div className="text-[11px] font-mono text-amber-400/90 font-semibold">{presets.SECONDS_MICRO_SCALPER.badge}</div>
         </div>
 
         {/* Preset 2 */}
@@ -145,19 +146,17 @@ export default function FastScalperTab({ onSaved }: { onSaved: () => void }) {
               : "bg-zinc-900/60 border-zinc-800 hover:border-zinc-700"
           }`}
         >
-          <div className="flex justify-between items-start mb-2">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-blue-400 bg-blue-500/20 px-2 py-0.5 rounded-full border border-blue-500/30">
+          <div className="flex justify-between items-start mb-2.5">
+            <span className="text-xs font-bold text-cyan-400 uppercase tracking-wider">
               🌊 Dip Reversal
             </span>
-            <span className="text-[10px] font-mono text-emerald-400 font-bold bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-800">
+            <span className="text-[10px] font-mono font-bold bg-cyan-950/80 text-cyan-300 border border-cyan-800 px-2 py-0.5 rounded-full">
               +0.45% TP / -0.30% SL
             </span>
           </div>
-          <h3 className="text-base sm:text-lg font-bold text-white mt-1">Micro-Dip Hunter</h3>
-          <div className="text-[10px] font-bold text-blue-400 mt-0.5">{presets.MICRO_DIP_HUNTER.badge}</div>
-          <p className="text-xs text-zinc-400 mt-1 line-clamp-2">
-            {presets.MICRO_DIP_HUNTER.desc}
-          </p>
+          <h4 className="text-base font-bold text-white mb-1.5">{presets.MICRO_DIP_HUNTER.name}</h4>
+          <p className="text-xs text-zinc-400 leading-relaxed mb-3">{presets.MICRO_DIP_HUNTER.desc}</p>
+          <div className="text-[11px] font-mono text-cyan-400/90 font-semibold">{presets.MICRO_DIP_HUNTER.badge}</div>
         </div>
 
         {/* Preset 3 */}
@@ -169,34 +168,32 @@ export default function FastScalperTab({ onSaved }: { onSaved: () => void }) {
               : "bg-zinc-900/60 border-zinc-800 hover:border-zinc-700"
           }`}
         >
-          <div className="flex justify-between items-start mb-2">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-purple-400 bg-purple-500/20 px-2 py-0.5 rounded-full border border-purple-500/30">
+          <div className="flex justify-between items-start mb-2.5">
+            <span className="text-xs font-bold text-purple-400 uppercase tracking-wider">
               🚀 Surge Runner
             </span>
-            <span className="text-[10px] font-mono text-emerald-400 font-bold bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-800">
+            <span className="text-[10px] font-mono font-bold bg-purple-950/80 text-purple-300 border border-purple-800 px-2 py-0.5 rounded-full">
               +0.60% TP / -0.35% SL
             </span>
           </div>
-          <h3 className="text-base sm:text-lg font-bold text-white mt-1">Momentum Blitz Scalper</h3>
-          <div className="text-[10px] font-bold text-purple-400 mt-0.5">{presets.MOMENTUM_BLITZ.badge}</div>
-          <p className="text-xs text-zinc-400 mt-1 line-clamp-2">
-            {presets.MOMENTUM_BLITZ.desc}
-          </p>
+          <h4 className="text-base font-bold text-white mb-1.5">{presets.MOMENTUM_BLITZ.name}</h4>
+          <p className="text-xs text-zinc-400 leading-relaxed mb-3">{presets.MOMENTUM_BLITZ.desc}</p>
+          <div className="text-[11px] font-mono text-purple-400/90 font-semibold">{presets.MOMENTUM_BLITZ.badge}</div>
         </div>
       </div>
 
-      {/* Preset Details & Safety Config */}
-      <div className="bg-zinc-900/70 border border-zinc-800 rounded-xl p-5 sm:p-6 space-y-5">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-zinc-800/80 pb-4 gap-3">
+      {/* Configuration & Action Deck */}
+      <div className="bg-zinc-900/80 border border-zinc-800 rounded-xl p-5 sm:p-6 space-y-5 shadow-xl">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-b border-zinc-800 pb-4">
           <div>
-            <h4 className="text-lg sm:text-xl font-bold text-white flex items-center gap-2">
-              ⚡ {activePreset.name}
-            </h4>
-            <p className="text-xs text-zinc-400 mt-1">{activePreset.desc}</p>
+            <h3 className="text-lg font-bold text-white flex items-center gap-2">
+              <span>⚡</span> {activePreset.name}
+            </h3>
+            <p className="text-xs text-zinc-400 mt-0.5">{activePreset.desc}</p>
           </div>
-          <div className="text-left sm:text-right shrink-0">
-            <div className="text-[10px] text-zinc-500 uppercase font-bold">Execution Engine</div>
-            <div className="text-xs font-bold text-amber-400 bg-amber-500/10 border border-amber-500/30 px-2.5 py-0.5 rounded-full inline-block mt-0.5">
+          <div className="text-right">
+            <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider block">Execution Engine</span>
+            <div className="text-xs font-mono font-bold text-amber-400 bg-amber-950/40 border border-amber-800/60 px-2.5 py-1 rounded-lg">
               {activePreset.speed}
             </div>
           </div>
@@ -212,7 +209,7 @@ export default function FastScalperTab({ onSaved }: { onSaved: () => void }) {
           ))}
         </div>
 
-        {/* Configuration Inputs */}
+        {/* Configuration Inputs with Real Available Balance Prominence */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5 pt-2">
           <div>
             <label className="text-xs font-semibold text-zinc-400 uppercase tracking-wider block mb-1.5">
@@ -227,29 +224,57 @@ export default function FastScalperTab({ onSaved }: { onSaved: () => void }) {
               <option value="BTC/USDT">BTC / USDT</option>
               <option value="ETH/USDT">ETH / USDT</option>
               <option value="XRP/USDT">XRP / USDT</option>
+              <option value="SOL/USDT">SOL / USDT</option>
               <option value="ADA/USDT">ADA / USDT</option>
             </select>
           </div>
 
           <div>
-            <label className="text-xs font-semibold text-zinc-400 uppercase tracking-wider block mb-1.5">
-              Trade Size (USDT)
-            </label>
-            <input
-              type="number"
-              min={10}
-              max={500}
-              value={tradeUSDT}
-              onChange={(e) => setTradeUSDT(Math.max(10, +e.target.value))}
-              className="w-full bg-black/60 border border-zinc-700 focus:border-amber-500 rounded-lg px-3 py-2.5 text-white font-medium text-sm outline-none transition-all"
-            />
+            <div className="flex justify-between items-center mb-1.5">
+              <label className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">
+                Trade Size (USDT)
+              </label>
+              <div className="text-[11px] font-mono flex items-center gap-1.5">
+                <span className="text-zinc-500">Available:</span>
+                <span className="text-emerald-400 font-bold">${availableUsdt.toFixed(2)} USDT</span>
+              </div>
+            </div>
+
+            <div className="relative">
+              <input
+                type="number"
+                min={10}
+                max={500}
+                value={tradeUSDT}
+                onChange={(e) => setTradeUSDT(Math.max(10, +e.target.value))}
+                className="w-full bg-black/60 border border-zinc-700 focus:border-amber-500 rounded-lg px-3 py-2.5 text-white font-medium text-sm outline-none transition-all pr-24 font-mono"
+              />
+              <div className="absolute right-1.5 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => setTradeUSDT(10)}
+                  className="px-2 py-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded text-[10px] font-bold font-mono transition-colors"
+                >
+                  $10
+                </button>
+                {availableUsdt >= 10 && (
+                  <button
+                    type="button"
+                    onClick={() => setTradeUSDT(Math.floor(availableUsdt))}
+                    className="px-2 py-1 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/30 rounded text-[10px] font-bold font-mono transition-colors"
+                  >
+                    MAX
+                  </button>
+                )}
+              </div>
+            </div>
           </div>
 
           <div>
             <label className="text-xs font-semibold text-zinc-400 uppercase tracking-wider block mb-1.5">
               Micro Risk Rules
             </label>
-            <div className="bg-black/60 border border-zinc-800 rounded-lg px-3 py-2 text-xs font-mono text-zinc-300 flex items-center justify-between">
+            <div className="bg-black/60 border border-zinc-800 rounded-lg px-3 py-2.5 text-xs font-mono text-zinc-300 flex items-center justify-between">
               <span>TP: +{activePreset.targetPct}%</span>
               <span>SL: -{activePreset.stopLossPct}%</span>
               <span>Circuit: 3 Losses</span>
@@ -261,7 +286,7 @@ export default function FastScalperTab({ onSaved }: { onSaved: () => void }) {
         <button
           onClick={launchFastBot}
           disabled={loading}
-          className="w-full py-3 sm:py-3.5 bg-gradient-to-r from-amber-600 via-orange-600 to-red-600 hover:from-amber-500 hover:to-orange-500 text-white rounded-xl font-bold text-sm shadow-lg shadow-orange-950/50 transition-all hover:scale-[1.01] active:scale-[0.99] flex items-center justify-center gap-2"
+          className="w-full py-3 sm:py-3.5 bg-gradient-to-r from-amber-600 via-orange-600 to-red-600 hover:from-amber-500 hover:to-orange-500 text-white rounded-xl font-bold text-sm shadow-lg shadow-orange-950/50 transition-all hover:scale-[1.01] active:scale-[0.99] flex items-center justify-center gap-2 cursor-pointer"
         >
           {loading ? (
             <span>⚡ Launching High-Speed Scalper...</span>

@@ -2,9 +2,15 @@
 
 import { useState } from "react";
 
-export default function SafeStrategyTab({ onSaved }: { onSaved: () => void }) {
+export default function SafeStrategyTab({
+  onSaved,
+  availableUsdt = 0
+}: {
+  onSaved: () => void;
+  availableUsdt?: number;
+}) {
   const [selectedPair, setSelectedPair] = useState("BNB/USDT");
-  const [tradeUSDT, setTradeUSDT] = useState(15);
+  const [tradeUSDT, setTradeUSDT] = useState(10);
   const [selectedPreset, setSelectedPreset] = useState<"BOLLINGER_RSI_EMA" | "VWAP" | "TREND_MOMENTUM">("BOLLINGER_RSI_EMA");
   const [loading, setLoading] = useState(false);
 
@@ -98,8 +104,7 @@ export default function SafeStrategyTab({ onSaved }: { onSaved: () => void }) {
     <div className="space-y-6">
       {/* Strategy Selection Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        
-        {/* Card 1: Filtered Mean Reversion */}
+        {/* Card 1 */}
         <div
           onClick={() => setSelectedPreset("BOLLINGER_RSI_EMA")}
           className={`cursor-pointer p-4 sm:p-5 rounded-xl border transition-all ${
@@ -108,22 +113,20 @@ export default function SafeStrategyTab({ onSaved }: { onSaved: () => void }) {
               : "bg-zinc-900/60 border-zinc-800 hover:border-zinc-700"
           }`}
         >
-          <div className="flex justify-between items-start mb-2">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-orange-400 bg-orange-500/20 px-2 py-0.5 rounded-full border border-orange-500/30">
-              ⭐ Recommended
+          <div className="flex justify-between items-start mb-2.5">
+            <span className="text-xs font-bold text-orange-400 uppercase tracking-wider">
+              {presets.BOLLINGER_RSI_EMA.riskLevel}
             </span>
-            <span className="text-[10px] font-mono text-emerald-400 font-bold bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-800">
+            <span className="text-[10px] font-mono font-bold bg-emerald-950/80 text-emerald-300 border border-emerald-800 px-2 py-0.5 rounded-full">
               {presets.BOLLINGER_RSI_EMA.winRateExpectancy}
             </span>
           </div>
-          <h3 className="text-base sm:text-lg font-bold text-white mt-1">Filtered Mean Reversion</h3>
-          <div className="text-[10px] font-bold text-amber-400 mt-0.5">{presets.BOLLINGER_RSI_EMA.regime}</div>
-          <p className="text-xs text-zinc-400 mt-1 line-clamp-2">
-            {presets.BOLLINGER_RSI_EMA.desc}
-          </p>
+          <h4 className="text-base font-bold text-white mb-1.5">{presets.BOLLINGER_RSI_EMA.name}</h4>
+          <p className="text-xs text-zinc-400 leading-relaxed mb-3">{presets.BOLLINGER_RSI_EMA.desc}</p>
+          <div className="text-[11px] font-mono text-zinc-500">{presets.BOLLINGER_RSI_EMA.timeframe}</div>
         </div>
 
-        {/* Card 2: VWAP Snapback */}
+        {/* Card 2 */}
         <div
           onClick={() => setSelectedPreset("VWAP")}
           className={`cursor-pointer p-4 sm:p-5 rounded-xl border transition-all ${
@@ -132,22 +135,20 @@ export default function SafeStrategyTab({ onSaved }: { onSaved: () => void }) {
               : "bg-zinc-900/60 border-zinc-800 hover:border-zinc-700"
           }`}
         >
-          <div className="flex justify-between items-start mb-2">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-blue-400 bg-blue-500/20 px-2 py-0.5 rounded-full border border-blue-500/30">
-              VWAP Scalp
+          <div className="flex justify-between items-start mb-2.5">
+            <span className="text-xs font-bold text-cyan-400 uppercase tracking-wider">
+              {presets.VWAP.riskLevel}
             </span>
-            <span className="text-[10px] font-mono text-emerald-400 font-bold bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-800">
+            <span className="text-[10px] font-mono font-bold bg-emerald-950/80 text-emerald-300 border border-emerald-800 px-2 py-0.5 rounded-full">
               {presets.VWAP.winRateExpectancy}
             </span>
           </div>
-          <h3 className="text-base sm:text-lg font-bold text-white mt-1">VWAP Snapback Scalper</h3>
-          <div className="text-[10px] font-bold text-blue-400 mt-0.5">{presets.VWAP.regime}</div>
-          <p className="text-xs text-zinc-400 mt-1 line-clamp-2">
-            {presets.VWAP.desc}
-          </p>
+          <h4 className="text-base font-bold text-white mb-1.5">{presets.VWAP.name}</h4>
+          <p className="text-xs text-zinc-400 leading-relaxed mb-3">{presets.VWAP.desc}</p>
+          <div className="text-[11px] font-mono text-zinc-500">{presets.VWAP.timeframe}</div>
         </div>
 
-        {/* Card 3: Trend Momentum Breakout */}
+        {/* Card 3 */}
         <div
           onClick={() => setSelectedPreset("TREND_MOMENTUM")}
           className={`cursor-pointer p-4 sm:p-5 rounded-xl border transition-all ${
@@ -156,50 +157,48 @@ export default function SafeStrategyTab({ onSaved }: { onSaved: () => void }) {
               : "bg-zinc-900/60 border-zinc-800 hover:border-zinc-700"
           }`}
         >
-          <div className="flex justify-between items-start mb-2">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-purple-400 bg-purple-500/20 px-2 py-0.5 rounded-full border border-purple-500/30">
-              Trend Breakout
+          <div className="flex justify-between items-start mb-2.5">
+            <span className="text-xs font-bold text-purple-400 uppercase tracking-wider">
+              {presets.TREND_MOMENTUM.riskLevel}
             </span>
-            <span className="text-[10px] font-mono text-emerald-400 font-bold bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-800">
+            <span className="text-[10px] font-mono font-bold bg-emerald-950/80 text-emerald-300 border border-emerald-800 px-2 py-0.5 rounded-full">
               {presets.TREND_MOMENTUM.winRateExpectancy}
             </span>
           </div>
-          <h3 className="text-base sm:text-lg font-bold text-white mt-1">Trend Momentum</h3>
-          <div className="text-[10px] font-bold text-purple-400 mt-0.5">{presets.TREND_MOMENTUM.regime}</div>
-          <p className="text-xs text-zinc-400 mt-1 line-clamp-2">
-            {presets.TREND_MOMENTUM.desc}
-          </p>
+          <h4 className="text-base font-bold text-white mb-1.5">{presets.TREND_MOMENTUM.name}</h4>
+          <p className="text-xs text-zinc-400 leading-relaxed mb-3">{presets.TREND_MOMENTUM.desc}</p>
+          <div className="text-[11px] font-mono text-zinc-500">{presets.TREND_MOMENTUM.timeframe}</div>
         </div>
       </div>
 
-      {/* Preset Details & Controls */}
-      <div className="bg-zinc-900/70 border border-zinc-800 rounded-xl p-5 sm:p-6 space-y-5">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-zinc-800/80 pb-4 gap-3">
+      {/* Configuration & Action Deck */}
+      <div className="bg-zinc-900/80 border border-zinc-800 rounded-xl p-5 sm:p-6 space-y-5 shadow-xl">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-b border-zinc-800 pb-4">
           <div>
-            <h4 className="text-lg sm:text-xl font-bold text-white flex items-center gap-2">
-              🛡️ {activePreset.name}
-            </h4>
-            <p className="text-xs text-zinc-400 mt-1">{activePreset.desc}</p>
+            <h3 className="text-lg font-bold text-white flex items-center gap-2">
+              <span>🛡️</span> {activePreset.name}
+            </h3>
+            <p className="text-xs text-zinc-400 mt-0.5">{activePreset.desc}</p>
           </div>
-          <div className="text-left sm:text-right shrink-0">
-            <div className="text-[10px] text-zinc-500 uppercase font-bold">Target Market Regime</div>
-            <div className="text-xs font-bold text-amber-400 bg-amber-500/10 border border-amber-500/30 px-2.5 py-0.5 rounded-full inline-block mt-0.5">
+          <div className="text-right">
+            <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider block">Market Regime Gate</span>
+            <div className="text-xs font-mono font-bold text-orange-400 bg-orange-950/40 border border-orange-800/60 px-2.5 py-1 rounded-lg">
               {activePreset.regime}
             </div>
           </div>
         </div>
 
-        {/* Feature Highlights */}
+        {/* Feature Tags */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3">
           {activePreset.features.map((feat, i) => (
             <div key={i} className="bg-black/40 border border-zinc-800 rounded-lg p-2.5 sm:p-3 text-center">
-              <div className="text-emerald-400 text-xs font-bold mb-0.5">✓ Guardrail</div>
+              <div className="text-emerald-400 text-xs font-bold mb-0.5">✓ Feature</div>
               <div className="text-[11px] sm:text-xs font-medium text-zinc-300">{feat}</div>
             </div>
           ))}
         </div>
 
-        {/* Configuration Inputs */}
+        {/* Configuration Inputs with Available USDT Bar */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5 pt-2">
           <div>
             <label className="text-xs font-semibold text-zinc-400 uppercase tracking-wider block mb-1.5">
@@ -214,32 +213,59 @@ export default function SafeStrategyTab({ onSaved }: { onSaved: () => void }) {
               <option value="BTC/USDT">BTC / USDT</option>
               <option value="ETH/USDT">ETH / USDT</option>
               <option value="XRP/USDT">XRP / USDT</option>
+              <option value="SOL/USDT">SOL / USDT</option>
               <option value="ADA/USDT">ADA / USDT</option>
             </select>
           </div>
 
           <div>
-            <label className="text-xs font-semibold text-zinc-400 uppercase tracking-wider block mb-1.5">
-              Trade Size (USDT)
-            </label>
-            <input
-              type="number"
-              min={10}
-              max={1000}
-              value={tradeUSDT}
-              onChange={(e) => setTradeUSDT(Math.max(10, +e.target.value))}
-              className="w-full bg-black/60 border border-zinc-700 focus:border-orange-500 rounded-lg px-3 py-2.5 text-white font-medium text-sm outline-none transition-all"
-            />
+            <div className="flex justify-between items-center mb-1.5">
+              <label className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">
+                Trade Size (USDT)
+              </label>
+              <div className="text-[11px] font-mono flex items-center gap-1.5">
+                <span className="text-zinc-500">Available:</span>
+                <span className="text-emerald-400 font-bold">${availableUsdt.toFixed(2)} USDT</span>
+              </div>
+            </div>
+
+            <div className="relative">
+              <input
+                type="number"
+                min={10}
+                max={500}
+                value={tradeUSDT}
+                onChange={(e) => setTradeUSDT(Math.max(10, +e.target.value))}
+                className="w-full bg-black/60 border border-zinc-700 focus:border-orange-500 rounded-lg px-3 py-2.5 text-white font-medium text-sm outline-none transition-all pr-24 font-mono"
+              />
+              <div className="absolute right-1.5 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => setTradeUSDT(10)}
+                  className="px-2 py-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded text-[10px] font-bold font-mono transition-colors"
+                >
+                  $10
+                </button>
+                {availableUsdt >= 10 && (
+                  <button
+                    type="button"
+                    onClick={() => setTradeUSDT(Math.floor(availableUsdt))}
+                    className="px-2 py-1 bg-orange-500/20 hover:bg-orange-500/30 text-orange-300 border border-orange-500/30 rounded text-[10px] font-bold font-mono transition-colors"
+                  >
+                    MAX
+                  </button>
+                )}
+              </div>
+            </div>
           </div>
 
           <div>
             <label className="text-xs font-semibold text-zinc-400 uppercase tracking-wider block mb-1.5">
-              Automated Guardrails
+              Risk Targets
             </label>
-            <div className="bg-black/60 border border-zinc-800 rounded-lg px-3 py-2 text-xs font-mono text-zinc-300 flex items-center justify-between">
-              <span>TP: +{activePreset.targetPct}%</span>
-              <span>SL: -{activePreset.stopLossPct}%</span>
-              <span>BE: +0.5%</span>
+            <div className="bg-black/60 border border-zinc-800 rounded-lg px-3 py-2.5 text-xs font-mono text-zinc-300 flex items-center justify-between">
+              <span>Target: +{activePreset.targetPct}%</span>
+              <span>Stop: -{activePreset.stopLossPct}%</span>
             </div>
           </div>
         </div>
@@ -248,13 +274,13 @@ export default function SafeStrategyTab({ onSaved }: { onSaved: () => void }) {
         <button
           onClick={launchSafeBot}
           disabled={loading}
-          className="w-full py-3 sm:py-3.5 bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-500 hover:to-green-500 text-white rounded-xl font-bold text-sm shadow-lg shadow-green-950/50 transition-all hover:scale-[1.01] active:scale-[0.99] flex items-center justify-center gap-2"
+          className="w-full py-3 sm:py-3.5 bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-500 hover:to-amber-500 text-white rounded-xl font-bold text-sm shadow-lg shadow-orange-950/40 transition-all hover:scale-[1.01] active:scale-[0.99] flex items-center justify-center gap-2 cursor-pointer"
         >
           {loading ? (
-            <span>⌛ Initializing Algorithm...</span>
+            <span>🚀 Launching Protected Strategy...</span>
           ) : (
             <>
-              <span>🛡️</span>
+              <span>⚡</span>
               <span>Launch {activePreset.name} ({selectedPair})</span>
             </>
           )}

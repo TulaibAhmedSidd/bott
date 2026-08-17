@@ -359,14 +359,14 @@ export default function Dashboard() {
                 <span className="font-bold text-orange-400">Professional Safe Strategy Rules:</span> Every trade uses 50-EMA macro trend filters, RSI curve-up reversal triggers, LOT_SIZE precision formatting, 0.1% Binance fee deduction, and dynamic trailing stops (+0.6% activation) to protect capital.
               </div>
             </div>
-            <SafeStrategyTab onSaved={() => { refresh(); setActiveTab('BOTS'); }} />
+            <SafeStrategyTab availableUsdt={freeUsdt} onSaved={() => { refresh(); setActiveTab('BOTS'); }} />
           </div>
         )}
 
         {/* TAB 3: SECONDS SCALPER */}
         {activeTab === 'FAST' && (
           <div className="space-y-6">
-            <FastScalperTab onSaved={() => { refresh(); setActiveTab('BOTS'); }} />
+            <FastScalperTab availableUsdt={freeUsdt} onSaved={() => { refresh(); setActiveTab('BOTS'); }} />
           </div>
         )}
 
@@ -376,7 +376,7 @@ export default function Dashboard() {
             <h2 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
               <span>🚀</span> Configure Custom Bot
             </h2>
-            <ConfigForm onSaved={() => { refresh(); setActiveTab('BOTS'); }} />
+            <ConfigForm availableUsdt={freeUsdt} onSaved={() => { refresh(); setActiveTab('BOTS'); }} />
           </div>
         )}
 

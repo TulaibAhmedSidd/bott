@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 
-// Helper components defined OUTSIDE the main component to prevent re-creation/remounting
 const InputField = ({ label, value, onChange, type = "text", placeholder }: any) => (
     <div className="space-y-1">
         <label className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">
@@ -10,7 +9,7 @@ const InputField = ({ label, value, onChange, type = "text", placeholder }: any)
         </label>
         <input
             type={type}
-            className="w-full bg-black/50 border border-zinc-700 focus:border-orange-500 rounded-lg px-3 py-2 text-white outline-none transition-all focus:ring-1 focus:ring-orange-500"
+            className="w-full bg-black/50 border border-zinc-700 focus:border-orange-500 rounded-lg px-3 py-2 text-white outline-none transition-all focus:ring-1 focus:ring-orange-500 font-mono text-sm"
             value={value}
             onChange={onChange}
             placeholder={placeholder}
@@ -24,7 +23,7 @@ const SelectField = ({ label, value, onChange, options }: any) => (
             {label}
         </label>
         <select
-            className="w-full bg-black/50 border border-zinc-700 focus:border-orange-500 rounded-lg px-3 py-2 text-white outline-none transition-all focus:ring-1 focus:ring-orange-500 appearance-none"
+            className="w-full bg-black/50 border border-zinc-700 focus:border-orange-500 rounded-lg px-3 py-2 text-white outline-none transition-all focus:ring-1 focus:ring-orange-500 appearance-none text-sm"
             value={value}
             onChange={onChange}
         >
@@ -37,7 +36,13 @@ const SelectField = ({ label, value, onChange, options }: any) => (
     </div>
 );
 
-export default function ConfigForm({ onSaved }: { onSaved: () => void }) {
+export default function ConfigForm({
+    onSaved,
+    availableUsdt = 0
+}: {
+    onSaved: () => void;
+    availableUsdt?: number;
+}) {
     const [form, setForm] = useState({
         symbol: "BNB/USDT",
         tradeUSDT: 10,
@@ -62,20 +67,19 @@ export default function ConfigForm({ onSaved }: { onSaved: () => void }) {
         return true;
     }
 
-    // Removed standalone save function button as requested
-    // const save = async () => ...
-
     const start = async () => {
         if (!validate()) return;
 
-        // 1. Save Config First (Ensure DB matches UI)
         await fetch("/api/config", {
             method: "POST",
             body: JSON.stringify(form),
         });
 
-        // 2. Start Bot
-        await fetch("/api/start", { method: "POST" });
+        await fetch("/api/start", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ symbol: form.symbol })
+        });
 
         onSaved();
     }
@@ -87,7 +91,7 @@ export default function ConfigForm({ onSaved }: { onSaved: () => void }) {
                     label="Trading Pair"
                     value={form.symbol}
                     onChange={(e: any) => setForm({ ...form, symbol: e.target.value })}
-                    options={["BNB/USDT", "BTC/USDT", "ETH/USDT", "XRP/USDT", "ADA/USDT"]}
+                    options={["BNB/USDT", "BTC/USDT", "ETH/USDT", "XRP/USDT", "SOL/USDT", "ADA/USDT"]}
                 />
                 <SelectField
                     label="Strategy"
@@ -97,62 +101,67 @@ export default function ConfigForm({ onSaved }: { onSaved: () => void }) {
                 />
             </div>
 
-            <InputField
-                label="Trade Amount (USDT)"
-                type="number"
-                value={form.tradeUSDT}
-                onChange={(e: any) => setForm({ ...form, tradeUSDT: +e.target.value })}
-                placeholder="Min 10 - Max 1000"
-            />
+            <div>
+                <div className="flex justify-between items-center mb-1">
+                    <label className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">
+                        Trade Size (USDT)
+                    </label>
+                    <div className="text-[11px] font-mono flex items-center gap-1.5">
+                        <span className="text-zinc-500">Available:</span>
+                        <span className="text-emerald-400 font-bold">${availableUsdt.toFixed(2)} USDT</span>
+                    </div>
+                </div>
+                <div className="relative">
+                    <input
+                        type="number"
+                        min={10}
+                        max={1000}
+                        value={form.tradeUSDT}
+                        onChange={(e: any) => setForm({ ...form, tradeUSDT: Math.max(10, +e.target.value) })}
+                        className="w-full bg-black/50 border border-zinc-700 focus:border-orange-500 rounded-lg px-3 py-2 text-white outline-none transition-all focus:ring-1 focus:ring-orange-500 font-mono text-sm pr-20"
+                    />
+                    <div className="absolute right-1.5 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                        <button
+                            type="button"
+                            onClick={() => setForm({ ...form, tradeUSDT: 10 })}
+                            className="px-2 py-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded text-[10px] font-bold font-mono transition-colors"
+                        >
+                            $10
+                        </button>
+                        {availableUsdt >= 10 && (
+                            <button
+                                type="button"
+                                onClick={() => setForm({ ...form, tradeUSDT: Math.floor(availableUsdt) })}
+                                className="px-2 py-1 bg-orange-500/20 hover:bg-orange-500/30 text-orange-300 border border-orange-500/30 rounded text-[10px] font-bold font-mono transition-colors"
+                            >
+                                MAX
+                            </button>
+                        )}
+                    </div>
+                </div>
+            </div>
 
             <div className="grid grid-cols-2 gap-4">
                 <InputField
-                    label="Take Profit %"
+                    label="Take Profit Target (%)"
                     type="number"
                     value={form.dailyTarget}
                     onChange={(e: any) => setForm({ ...form, dailyTarget: +e.target.value })}
-                    placeholder="Max 20%"
                 />
-
                 <InputField
-                    label="Stop Loss %"
+                    label="Stop Loss Limit (%)"
                     type="number"
                     value={form.stopLoss}
                     onChange={(e: any) => setForm({ ...form, stopLoss: +e.target.value })}
-                    placeholder="Max 20%"
                 />
             </div>
 
-            {form.strategy === 'DAILY_PCT' && (
-                <div className="bg-orange-500/10 border border-orange-500/30 p-3 rounded-lg space-y-2">
-                    <div className="text-orange-400 text-xs font-bold uppercase tracking-wider flex items-center gap-2">
-                        <span>🔁</span> Loop Settings
-                    </div>
-                    <InputField
-                        label="Max Iterations (Loop Count)"
-                        type="number"
-                        value={(form as any).maxTrades || 0}
-                        onChange={(e: any) => setForm({ ...form, maxTrades: +e.target.value } as any)}
-                        placeholder="0 = Unlimited"
-                    />
-                    <div className="text-[10px] text-zinc-500">
-                        Bot will buy immediately, sell at Target %, and repeat X times.
-                    </div>
-                </div>
-            )}
-
-            <div className="flex flex-col gap-3 pt-4">
-                {(/* Hidden Save Button */ null)}
-
-                <div className="grid grid-cols-1 gap-3">
-                    <button
-                        onClick={start}
-                        className="bg-green-600 hover:bg-green-700 text-white py-3 rounded-lg font-bold shadow-lg shadow-green-900/20 transition-all hover:scale-[1.02] active:scale-95 flex items-center justify-center gap-2"
-                    >
-                        <span>🚀</span> Start & Save Bot ({form.symbol})
-                    </button>
-                </div>
-            </div>
+            <button
+                onClick={start}
+                className="w-full bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-black font-bold py-3 px-4 rounded-xl transition duration-200 mt-2 shadow-lg shadow-orange-950/40 cursor-pointer"
+            >
+                🚀 Save & Launch Custom Bot
+            </button>
         </div>
     );
 }
